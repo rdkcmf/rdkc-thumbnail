@@ -54,7 +54,6 @@ extern "C" {
 #include "HttpClient.h"
 #include "RdkCVideoCapturer.h"
 #include "RdkCPluginFactory.h"
-#include "RFCCommon.h"
 #include "opencv2/opencv.hpp"
 
 #define CACHE_SMARTTHUMBNAIL "/tmp/cache_smart_thumbnail.txt"
@@ -169,7 +168,6 @@ class SmartThumbnail
 	STH_STATUS createPayload(char* uploadFname);
 	STH_STATUS getTnUploadConf();
 	STH_STATUS getEventConf();
-	bool checkEnabledRFCFeature(char* rfcFeatureFname, char* featureName);
 	//sets the camera firmware version.
 	int setCameraImageName(char* out);
 	//sets the camera firmware version.

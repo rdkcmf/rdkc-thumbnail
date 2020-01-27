@@ -66,10 +66,8 @@ SmartThumbnail::~SmartThumbnail()
 
 void SmartThumbnail::sigHandler(int signum){
     if(SIGTERM == signum){
-        //std::cout << "received SIGTERM\n";
         termFlag = true;
     } else if( SIGINT == signum){
-        //std::cout << "received SIGINT\n";
         termFlag = true;
     }
 }
@@ -197,40 +195,6 @@ STH_STATUS SmartThumbnail::init()
     uploadPayloadThread.detach();
 
     return STH_SUCCESS;
-}
-
-/** @description: Checks if the feature is enabled via RFC
- *  @param[in] rfc_feature_fname: RFC feature filename
- *  @param[in] feature_name: RFC parameter name
- *  @return: bool
- */
-bool SmartThumbnail::checkEnabledRFCFeature(char* rfcFeatureFname, char* featureName)
-{
-    /* set cvr audio through RFC files */
-    char value[10] = {0};
-
-    if((NULL == rfcFeatureFname) ||
-       (NULL == featureName)) {
-        return STN_FALSE;
-    }
-
-    /* Check if RFC configuration file exists */
-    if(0 == IsRFCFileAvailable(rfcFeatureFname)) {
-        /* Get the value from RFC file */
-        if( STH_SUCCESS == GetValueFromRFCFile(rfcFeatureFname, featureName, value) ) {
-            if( strcmp(value, STN_TRUE) == 0) {
-                //RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): %s is enabled via RFC.\n",__FILE__, __LINE__, featureName);
-                return true;
-            } else {
-                RDK_LOG( RDK_LOG_INFO,"LOG.RDKSMARTTHUMBNAIL","%s(%d): %s is disabled via RFC.\n",__FILE__, __LINE__, featureName);
-                return false;
-            }
-        }
-        /* If RFC file is not present, disable the feature */
-    } else {
-        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): rfc feature file %s is not present.\n",__FILE__, __LINE__, rfcFeatureFname);
-        return false;
-    }
 }
 
 /** @description: Get thumbnail upload conf
@@ -1584,11 +1548,7 @@ STH_STATUS SmartThumbnail::receiveRtmessage()
 void SmartThumbnail::uploadSTN()
 {
      while (!termFlag){
-	//exit app if smt Thumbnail is disabled via RFC
-        /*if(!smartThInst->checkEnabledRFCFeature(RFC_SMART_TN_UPLOAD, SMART_TN_UPLOAD)) {
-	    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exiting smart thumbnail, Disable via RFC!!!\n", __FILE__, __LINE__);
-	    break;
-        }*/
+
 	if(tnUploadConfRefreshed){
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Tn Upload Conf refreshed, fetching new URL and auth token!!\n", __FUNCTION__, __LINE__);
 
