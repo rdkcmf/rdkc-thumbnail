@@ -22,42 +22,6 @@
 #include "smart_thumbnail.h"
 #include <unistd.h>
 
-#if 0
-/** @description: Checks if the feature is enabled via RFC
- *  @param[in] rfc_feature_fname: RFC feature filename
- *  @param[in] feature_name: RFC parameter name
- *  @return: bool
- */
-bool checkEnabledRFCFeature(char* rfcFeatureFname, char* featureName)
-{
-    /* set cvr audio through RFC files */
-    char value[10] = {0};
-
-    if((NULL == rfcFeatureFname) ||
-       (NULL == featureName)) {
-        return STN_FALSE;
-    }
-
-    /* Check if RFC configuration file exists */
-    if(0 == IsRFCFileAvailable(rfcFeatureFname)) {
-        /* Get the value from RFC file */
-        if( STH_SUCCESS == GetValueFromRFCFile(rfcFeatureFname, featureName, value) ) {
-            if( strcmp(value, STN_TRUE) == 0) {
-                //RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): %s is enabled via RFC.\n",__FILE__, __LINE__, featureName);
-                return true;
-            } else {
-                RDK_LOG( RDK_LOG_DEBUG,"LOG.RDKSMARTTHUMBNAIL","%s(%d): %s is disabled via RFC.\n",__FILE__, __LINE__, featureName);
-                return false;
-            }
-        }
-        /* If RFC file is not present, disable the feature */
-    } else {
-        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): rfc feature file %s is not present.\n",__FILE__, __LINE__, rfcFeatureFname);
-        return false;
-    }
-}
-#endif
-
 int main(int argc, char** argv)
 {
 	SmartThumbnail *smTnInstance = NULL;
@@ -74,8 +38,6 @@ int main(int argc, char** argv)
 
 	//initialize rdklogger
 	rdk_logger_init("/etc/debug.ini");
-	//initialize RFC
-	RFCConfigInit();
 
 	//create instance
 	smTnInstance = SmartThumbnail::getInstance();
@@ -92,93 +54,11 @@ int main(int argc, char** argv)
 	}
 
 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Notify xvision and cvr daemon.\n", __FILE__, __LINE__);
-#if 0	
-        //Initially sleep for upload interval time, to allow smart thumbnail to be generated.
-	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Putting the Smart Thumnail Upload to sleep for %d seconds.\n", __FILE__, __LINE__, STN_UPLOAD_TIME_INTERVAL);
-        sleep(STN_UPLOAD_TIME_INTERVAL);
-	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail Upload is ready.\n", __FILE__, __LINE__);
-#endif
+
 	//Notify start status 
 	smTnInstance-> notify("start");
 
-	smTnInstance-> receiveRtmessage(); 
-#if 0
-	while (true) {
-
-#if 0
-		//clock the start time
-		memset(&startTime, 0, sizeof(startTime));
-	        clock_gettime(CLOCK_REALTIME, &startTime);
-#endif
-
-		//exit app if smt Thumbnail is disabled via RFC
-		if(!checkEnabledRFCFeature(RFC_SMART_TN_UPLOAD, SMART_TN_UPLOAD)) {
-			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exiting smart thumbnail, Disable via RFC!!!\n", __FILE__, __LINE__);
-			break;
-		}
-		
-#if 0		
-		//create payload
-                status = smTnInstance->createPayload();
-		if ( (STH_NO_PAYLOAD == status) ||
-		    (STH_ERROR == status) ) {
-			RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Unable to create payload for smart thumnail, hence skipping!!!\n", __FILE__, __LINE__);
-
-			//clock current time
-			memset(&currTime, 0, sizeof(currTime));
-	        	clock_gettime(CLOCK_REALTIME, &currTime);
-			RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Time spent for payload creation %d seconds!!!\n", __FILE__, __LINE__, (currTime.tv_sec - startTime.tv_sec));
-
-			// sleep maximum of smart thumbnail time interval(~15 seconds)
-			if( (currTime.tv_sec - startTime.tv_sec) >= STN_UPLOAD_TIME_INTERVAL ) {
-				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exceed upload time interval!!!\n", __FILE__, __LINE__);
-				continue;
-			} else {
-				remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
-				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
-				sleep (remainingTime);
-				continue;
-			}
-                }
-
-		RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Created payload for smart thumnail successfully.. Going to upload now!!!\n", __FILE__, __LINE__);
-
-		// clock the current time
-		memset(&currTime, 0, sizeof(currTime));
-	        clock_gettime(CLOCK_REALTIME, &currTime);
-		RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): currTime.tv_sec %d startTime.tv_sec %d (currTime.tv_sec - startTime.tv_sec)!!!\n", __FILE__, __LINE__, currTime.tv_sec, startTime.tv_sec, (currTime.tv_sec - startTime.tv_sec));
-
-		smTnInstance->uploadPayload(STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec));
-
-		// clock the current time
-		memset(&currTime, 0, sizeof(currTime));
-	        clock_gettime(CLOCK_REALTIME, &currTime);
-
-		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Time spent to upload smart thumbnail %d seconds!!!\n", __FILE__, __LINE__, (currTime.tv_sec - startTime.tv_sec));
-		if( (currTime.tv_sec - startTime.tv_sec) >= STN_UPLOAD_TIME_INTERVAL ) {
-			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exceed upload time interval!!!\n", __FILE__, __LINE__);
-			continue;
-		}
-		else {
-			//calculate the time needed to sleep for next interval.
-			remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
-			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
-			sleep (remainingTime);
-		}
-	}
-#endif
-
-#if 1 
-		if(smTnInstance -> getUploadStatus()) {
-			smTnInstance->uploadPayload(STN_UPLOAD_TIME_INTERVAL);
-			//smTnInstance->setUploadStatus(false);
-		}
-#endif
-
-		
-	}
-#endif
-
+	smTnInstance-> receiveRtmessage();
 		
 	//notify exit status
 	smTnInstance -> notify("stop");
@@ -188,7 +68,7 @@ int main(int argc, char** argv)
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Deleting smart thumnail instance!!!\n", __FILE__, __LINE__);
 		smTnInstance-> destroy();
 	}
-	RFCRelease();
+
 	return 0;
 }
 
