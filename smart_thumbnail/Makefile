@@ -21,11 +21,26 @@
 USE_OPENCV = yes
 USE_HTTPCLIENT = yes
 USE_RFCCONFIG = yes
-USE_CONFIGMGR = yes
 USE_RTMESSAGE = yes
+USE_MFRLIB = yes
+USE_CONFIGMGR = yes
 USE_LIBSYSWRAPPER = yes
-USE_PLUGINS = yes
 
+ifeq ($(XCAM_MODEL), XHB1)
+CFLAGS  += -DXHB1
+USE_DEWARP = yes
+else
+SUPPORT_MXML = yes
+endif
+ENABLE_DIRECT_FRAME_READ := true
+
+ifneq ($(ENABLE_XSTREAMER), true)
+USE_PLUGINS = yes
+else
+USE_CONSUMER = yes
+endif
+
+USE_CONFIGUTILS = yes
 include ${RDK_PROJECT_ROOT_PATH}/utility/AppsRule.mak
 LIBS = $(LIBFLAGS)
 
@@ -42,6 +57,17 @@ CFLAGS	+= -DUSE_FILE_UPLOAD
 
 ifeq ($(USE_LEGACY_CONFIG_MGR), yes)
 CFLAGS  += -DLEGACY_CFG_MGR
+endif
+
+ifeq ($(ENABLE_XSTREAMER), true)
+$(info( '*************XSTREAMER ENABLED**************')
+CFLAGS  += -D_HAS_XSTREAM_
+ifeq ($(ENABLE_DIRECT_FRAME_READ), true)
+$(info( '*************DIRECT READ FRAME ENABLED**************')
+CFLAGS   += -D_DIRECT_FRAME_READ_
+LIBS    += -Wl,-rpath-link=$(PROJ_ROOT)/vendor/img/fs/shadow_root/usr/lib
+endif
+
 endif
 
 CFLAGS += -DUSE_MFRLIB

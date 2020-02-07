@@ -166,10 +166,12 @@ int ThumbnailUpload::checkTNUploadfilelock(char *fname)
                         kill(pid, SIGTERM);
                         close(fd);
                         sleep(1);
+#ifndef OSI
                         if (CheckAppsPidAlive( (char*)str , pid))
                         {
                                 kill(pid, SIGTERM);
                         }
+#endif
                 }
                 unlink(fname);
                 return -2;
@@ -273,31 +275,84 @@ bool ThumbnailUpload::getTNUploadProvAttr()
  */
 ThumbnailUpload *ThumbnailUpload::getTNUploadInstance()
 {
-
 	if (NULL == thumbnailUpload)
 	{
     		thumbnailUpload = new ThumbnailUpload();
+		int ret = getCameraImageName(fw_name);
+        	
+		if (ret == RDKC_FAILURE)
+		{
+			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera firmware name\n", __FILE__, __LINE__);
+		}
+
+        	int ret1 = getCameraVersionNum(ver_num);
+        	if (ret1 == RDKC_FAILURE)
+		{
+			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera version num\n", __FILE__, __LINE__);
+		}
+#ifdef OSI
+		memset(mac_string, 0, sizeof(mac_string));
+		char mac[CONFIG_STRING_MAX];
+        	mfrSerializedData_t stdata = {NULL, 0, NULL};
+        	mfrSerializedType_t stdatatype = mfrSERIALIZED_TYPE_DEVICEMAC;
+        
+        	if(mfrGetSerializedData(stdatatype, &stdata) == mfrERR_NONE)
+        	{       
+                	strncpy(mac,stdata.buf,stdata.bufLen);
+                	mac[stdata.bufLen] = '\0';
+                	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac= %s,%s,%d\n",__FILE__, __LINE__,mac,stdata.buf,stdata.bufLen);
+                
+                	char tmpMac[CONFIG_STRING_MAX+1];
+                	char *tmpField;
+                	int fieldNum=0;
+                
+                	strcpy(tmpMac, mac);
+                	tmpField = strtok(tmpMac, ":");
+                
+                	while (tmpField != NULL && fieldNum < 6)
+                	{       
+                        	char *chk;
+                        	unsigned long tmpVal;
+                        
+                        	tmpVal = strtoul(tmpField, &chk, 16);
+                        
+                       	 	if (tmpVal > 0xff)
+                        	{       
+                                	RDK_LOG( RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","field %d value %0x out of range\n", fieldNum, tmpVal);
+                       	 	}
+                        	if (*chk != 0)
+                        	{       
+                                	RDK_LOG( RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","Non-digit character %c (%0x) detected in field %d\n", *chk, *chk, fieldNum);
+                        	}
+                        
+                        	fieldNum++;
+                        	strcat(mac_string, tmpField);
+                        	tmpField = strtok(NULL, ":");
+                	}
+                	mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN+1] = '\0';
+                
+                	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac address= %s\n",__FILE__, __LINE__,mac_string);
+                	if (stdata.freeBuf != NULL)
+                	{       
+                        	stdata.freeBuf(stdata.buf);
+                        	stdata.buf = NULL;
+                	}
+        	}                
+
+		//strcpy(mac_string,"142E5E063FE6");
+#else
+		unsigned char macaddr[MAC_ADDR_LEN];
+
+		if (0 == get_mac_address(macaddr)) {
+                	memset(mac_string, 0, sizeof(mac_string));
+                	transcode_mac_to_string_by_separator(macaddr, '\0', mac_string, XFINITY_MAC_STRING_LEN+1, 0);
+        	}
+		else {
+			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera mac address\n", __FILE__, __LINE__);
+			strcpy(mac_string,"No MACADDR");
+		}
+#endif
 	}
-
-        int ret = getCameraImageName(fw_name);
-        if (ret == RDKC_FAILURE)
-		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera firmware name\n", __FILE__, __LINE__);
-
-        int ret1 = getCameraVersionNum(ver_num);
-        if (ret1 == RDKC_FAILURE)
-		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera version num\n", __FILE__, __LINE__);
-
-	unsigned char macaddr[MAC_ADDR_LEN];
-
-	if (0 == get_mac_address(macaddr)) {
-                memset(mac_string, 0, sizeof(mac_string));
-                transcode_mac_to_string_by_separator(macaddr, '\0', mac_string, XFINITY_MAC_STRING_LEN+1, 0);
-        }
-	else {
-		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera mac address\n", __FILE__, __LINE__);
-		strcpy(mac_string,"No MACADDR");
-	}
-
 	return thumbnailUpload;
 }
 
@@ -347,9 +402,11 @@ void ThumbnailUpload::setActiveInterval(void)
 	char  duration[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH];
 	char* thumbnail_upload_interval_value = NULL ;
 	char* duration_value = NULL;
-
+#ifdef OSI
+	currentTime = getCurrentTime(NULL); 
+#else
 	currentTime = sc_linear_time(NULL);
-
+#endif
   	// Reset the upload count only if the mode moves from passive to active.
 	if(false == isActiveInterval) {
 	        RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Moving to Active mode. Resetting the Upload Count to 0\n", __FILE__, __LINE__);
@@ -407,7 +464,11 @@ int ThumbnailUpload::updateActiveUploadDuration()
         int ret = RDKC_SUCCESS;
 	int uploadDuration = 0;
 	char* duration_value = NULL;
+	#ifdef OSI
+	currentTime = getCurrentTime(NULL);
+	#else
 	currentTime = sc_linear_time(NULL);
+	#endif
 	uploadDuration = activeUploadDuration - currentTime;
 
 	duration = (char*)malloc(SIZE);
@@ -697,7 +758,7 @@ int ThumbnailUpload::uploadThumbnailImage()
 	int file_len = 0;
 	struct stat file_stat;
 	char pack_head[THUMBNAIL_UPLOAD_SEND_LEN+1];
-	unsigned char macaddr[MAC_ADDR_LEN];
+//	unsigned char macaddr[MAC_ADDR_LEN];
 	char url_string[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH+1];
 	long response_code = 0;
 	int ret_jpeg = 0;
@@ -947,8 +1008,11 @@ void *ThumbnailUpload::doTNUpload()
 
 		//Getting Upload Attribute
 		ThumbnailUpload::getTNUploadInstance()->getTNUploadAttr();
-
-		current_time = sc_linear_time(NULL);
+		#ifdef OSI
+        	current_time = getCurrentTime(NULL);
+		#else
+        	current_time = sc_linear_time(NULL);
+		#endif
 		if((0 != start_upload_time) && ((tn_upload_interval + start_upload_time) > current_time))
 		{
 			waitingInterval = ((tn_upload_interval + start_upload_time) - current_time);
@@ -958,7 +1022,11 @@ void *ThumbnailUpload::doTNUpload()
 			{
 				if(0 != start_upload_time)
 				{
-					start_active_time = sc_linear_time(NULL);
+					#ifdef OSI
+        				start_active_time = getCurrentTime(NULL);
+					#else
+        				start_active_time = sc_linear_time(NULL);
+					#endif
 					while(0 < durationLeft)
 					{
 						if(NULL != ThumbnailUpload::getTNUploadInstance())
@@ -978,7 +1046,12 @@ void *ThumbnailUpload::doTNUpload()
 							}
 						}
 						sleep(1);
-						current_time = sc_linear_time(NULL);
+						#ifdef OSI
+                                        	current_time = getCurrentTime(NULL);
+                                        	#else
+                                        	current_time = sc_linear_time(NULL);
+                                        	#endif
+
 						durationLeft = waitingInterval + start_active_time - current_time;
 					}
 
@@ -1001,7 +1074,11 @@ void *ThumbnailUpload::doTNUpload()
 		}
 
 		//Starting Time
-		start_upload_time = sc_linear_time(NULL);
+ 		#ifdef OSI
+                start_upload_time = getCurrentTime(NULL);
+              	#else
+                start_upload_time = sc_linear_time(NULL);
+                #endif
 
 		if(NULL == ThumbnailUpload::getTNUploadInstance())
 		{
@@ -1021,7 +1098,11 @@ void *ThumbnailUpload::doTNUpload()
 	
 			/*Uploading the Thumbnail Image*/
 			do {
-				upload_start_time = sc_linear_time(NULL);
+				#ifdef OSI
+                		upload_start_time = getCurrentTime(NULL);
+                		#else
+                		upload_start_time = sc_linear_time(NULL);
+                		#endif
 				
 				if (TN_UPLOAD_OK != (ThumbnailUpload::getTNUploadInstance())->uploadThumbnailImage())
 				{
@@ -1052,13 +1133,23 @@ void *ThumbnailUpload::doTNUpload()
 					uploadRetryCount++;
 
 					// break if "total upload time" including all the retries exceeds the current "upload interval"
+					#ifdef OSI
+					if( ((getCurrentTime(NULL) - start_upload_time) >= tn_upload_interval) || (uploadRetryCount > MAX_UPLOAD_RETRY) ) {
+                                                break;
+                                        }
+
+					#else
 					if( ((sc_linear_time(NULL) - start_upload_time) >= tn_upload_interval) || (uploadRetryCount > MAX_UPLOAD_RETRY) ) {
 						break;
 					}
+					#endif
 
 					// calculate the time taken for the failed upload
+					#ifdef OSI
+					time_for_upload = getCurrentTime(NULL) - upload_start_time;
+					#else
 					time_for_upload = sc_linear_time(NULL) - upload_start_time;
-
+					#endif
 					// Retry should happen for the leftover time
 					if( (time_for_upload < 0) ||  (time_for_upload >= MAX_RETRY_SLEEP) ) {
 						RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Retry Happens after 0 seconds\n",__FILE__, __LINE__);	
@@ -1073,8 +1164,11 @@ void *ThumbnailUpload::doTNUpload()
 					uploadRetryCount = 0;
 					break;
 				}
+			#ifdef OSI
+			} while( (uploadRetryCount <= MAX_UPLOAD_RETRY) && ((getCurrentTime(NULL) - start_upload_time) < tn_upload_interval) );
+			#else
 			} while( (uploadRetryCount <= MAX_UPLOAD_RETRY) && ((sc_linear_time(NULL) - start_upload_time) < tn_upload_interval) );
-
+			#endif
 			//Reset the retry count
 			uploadRetryCount = 0;
 		}
@@ -1086,7 +1180,11 @@ void *ThumbnailUpload::doTNUpload()
 
 		if(true == isActiveInterval)
                 {
-			 start_active_time = sc_linear_time(NULL);
+			#ifdef OSI
+			start_active_time = getCurrentTime(NULL);
+			#else
+			start_active_time = sc_linear_time(NULL);
+			#endif
                 }
 	}
 

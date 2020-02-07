@@ -47,14 +47,18 @@ export RDK_DIR=$BUILDS_DIR
 export ENABLE_RDKC_LOGGER_SUPPORT=true
 export DCA_PATH=$RDK_SOURCE_PATH
 
+echo "Disable xStreamer by default"
+export ENABLE_XSTREAMER=false
+
 if [ "$XCAM_MODEL" == "SCHC2" ]; then
 . ${RDK_PROJECT_ROOT_PATH}/build/components/amba/sdk/setenv2
-elif [ "$XCAM_MODEL" == "SERXW3" ] || [ "$XCAM_MODEL" == "SERICAM2" ]; then
+else
 . ${RDK_PROJECT_ROOT_PATH}/build/components/sdk/setenv2
-else #No Matching platform
-    echo "Source environment that include packages for your platform. The environment variables PROJ_PRERULE_MAK_FILE should refer to the platform s PreRule make"
 fi
-
+if [ "$XCAM_MODEL" == "XHB1" ];then
+echo "setxStreamer - Enable xStreamer"
+export ENABLE_XSTREAMER=true
+fi	
 export PLATFORM_SDK=${RDK_TOOLCHAIN_PATH}
 export FSROOT=$RDK_FSROOT_PATH
 
@@ -130,12 +134,20 @@ function install()
     echo "thumbnail Installation is done"
 }
 
+# This function sets the XSTREAMER flag
+function setxStreamer()
+{
+    echo "setxStreamer - Enable xStreamer"
+    export ENABLE_XSTREAMER=true
+}
+
 # run the logic
 #these args are what left untouched after parse_args
 HIT=false
 
-for i in "$ARGS"; do
+for i in "$@"; do
     case $i in
+        enablexStreamer)  HIT=true; setxStreamer ;;
         configure)  HIT=true; configure ;;
         clean)      HIT=true; clean ;;
         build)      HIT=true; build ;;
