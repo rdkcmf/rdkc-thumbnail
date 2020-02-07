@@ -31,26 +31,39 @@ int SmartThumbnail::waitingInterval = 1 ;
  *  @return: void
  */
 //SmartThumbnail::SmartThumbnail():hres_yuvData(NULL),
-SmartThumbnail::SmartThumbnail():recorder(NULL),
-				 httpClient(NULL),
-				 hres_y_size(0),
-				 hres_uv_size(0),
-				 hres_y_height(0),
-				 hres_y_width(0),
-				 maxBboxArea(0),
-				 isHresFrameReady(false),
-				 event_quiet_time(STN_DEFAULT_EVT_QUIET_TIME),
-				 uploadReady(false),
-				 isPayloadAvailable(false),
-				 cvrClipGenStarted(false), 
-				 dnsCacheTimeout(STN_DEFAULT_DNS_CACHE_TIMEOUT),
-				 sTnHeight(STN_DEFAULT_HEIGHT),
-				 sTnWidth(STN_DEFAULT_WIDTH)
+SmartThumbnail::SmartThumbnail():
+#ifdef _HAS_XSTREAM_
+				consumer(NULL),
+				frameInfo(NULL),
+#else
+				recorder(NULL),
+#endif
+				httpClient(NULL),
+				hres_y_size(0),
+				hres_uv_size(0),
+				hres_y_height(0),
+				hres_y_width(0),
+				maxBboxArea(0),
+				isHresFrameReady(false),
+				event_quiet_time(STN_DEFAULT_EVT_QUIET_TIME),
+				uploadReady(false),
+				isPayloadAvailable(false),
+				cvrClipGenStarted(false),
+				dnsCacheTimeout(STN_DEFAULT_DNS_CACHE_TIMEOUT),
+				sTnHeight(STN_DEFAULT_HEIGHT),
+				sTnWidth(STN_DEFAULT_WIDTH)
 {
     memset(uploadFname, 0, sizeof(uploadFname));
     memset(smtTnUploadURL, 0, sizeof(smtTnUploadURL));
     memset(smtTnAuthCode, 0, sizeof(smtTnAuthCode));
     memset(currSTNFname, 0, sizeof(currSTNFname));
+#ifdef _HAS_XSTREAM_
+#ifndef _DIRECT_FRAME_READ_
+	frameHandler = {NULL, -1};
+	//frameHandler.curl_handle = NULL;
+	//frameHandler.sockfd = -1;
+#endif
+#endif
 
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart thumbnail constructor invoked.\n", __FUNCTION__, __LINE__);
 }
@@ -155,6 +168,31 @@ STH_STATUS SmartThumbnail::init()
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart_thumbnail height: %d \n",__FUNCTION__, __LINE__,sTnHeight);
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart_thumbnail width: %d \n",__FUNCTION__, __LINE__,sTnWidth);
 
+#ifdef _HAS_XSTREAM_
+    //Create the consumer class object
+    consumer = new XStreamerConsumer;
+    if (!consumer){
+          RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error creating instance of xstreamerConsumer.\n", __FUNCTION__, __LINE__);
+		  return STH_ERROR;
+    }
+
+    //initialize
+#ifdef _DIRECT_FRAME_READ_
+    if(STH_SUCCESS != smartThInst->consumer->RAWInit((u16)STN_HRES_BUFFER_ID)){
+#else
+    frameHandler = smartThInst->consumer->RAWInit(STN_HRES_BUFFER_ID, FORMAT_YUV, 1);
+    if(frameHandler.sockfd < 0) {
+#endif
+        RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to initialize resources for reading raw frames.\n", __FUNCTION__, __LINE__);
+		return STH_ERROR;
+    }
+
+    frameInfo = consumer->GetRAWFrameContainer();
+    if( NULL == frameInfo ){
+        RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to create applicaton buffer\n", __FUNCTION__, __LINE__);
+		return STH_ERROR;
+    }
+#else
     //creating plugin factory instance.
     pluginFactory = CreatePluginFactoryInstance();
     if (!pluginFactory) {
@@ -175,6 +213,7 @@ STH_STATUS SmartThumbnail::init()
         RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Frame malloc error for high res frame info. \n", __FUNCTION__ , __LINE__);
         return STH_ERROR;
     }
+#endif
 
     //initialize http client
     httpClient = new HttpClient();
@@ -361,7 +400,7 @@ STH_STATUS SmartThumbnail::saveSTN()
 #endif
             //RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Resized the cropped object frame.\n", __FILE__, __LINE__);
 	    //cv::resize(croppedObj, resizedRGBMat,cv::Size(sTnWidth, sTnHeight));
-	    strcpy(currSTN.fname, currSTNFname); 
+	    strcpy(currSTN.fname, currSTNFname);
 
 	    snprintf(fPath, sizeof(fPath), "%s/%s", STN_PATH, currSTNFname);
             RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):smart thumbnail full path:%s .\n", __FILE__, __LINE__, fPath);
@@ -400,7 +439,7 @@ void SmartThumbnail::printSTNList()
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):STN list size:%d\n", __FILE__, __LINE__, STNList.size());
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):STN fname  ->  STN tstamp", __FILE__, __LINE__);
     //vector<STHPayload>::iterator it;
-    for (vector<STHPayload>::iterator it = STNList.begin(); it != STNList.end(); ++it) {
+    for (std::vector<STHPayload>::iterator it = STNList.begin(); it != STNList.end(); ++it) {
     	RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):		%s  -> %llu \n", __FILE__, __LINE__, (*it).fname, (*it).tstamp);
     }
 }
@@ -416,9 +455,9 @@ STH_STATUS SmartThumbnail::addSTN()
     std::unique_lock<std::mutex> lock(stnMutex);
     if(STNList.size() == STN_MAX_PAYLOAD_COUNT) {
 	//delete the files in the list
-	int ctr = 0; 
+	int ctr = 0;
 	while(ctr < STN_MAX_PAYLOAD_COUNT) {
-	    vector<STHPayload>::iterator it = STNList.begin();
+	    std::vector<STHPayload>::iterator it = STNList.begin();
 	    memset(stnFname, 0 , sizeof(stnFname));
 	    snprintf(stnFname, sizeof(stnFname), "%s/%s", STN_PATH, (*it).fname);
 	    RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","addSTN %s(%d) Deleting %s file, and erasing from list\n", __FUNCTION__ , __LINE__, stnFname);
@@ -452,7 +491,7 @@ STH_STATUS SmartThumbnail::delSTN(char* uploadFname)
 
     std::unique_lock<std::mutex> lock(stnMutex);
     //vector<STHPayload>::iterator it;
-    for (vector<STHPayload>::iterator it = STNList.begin(); it != STNList.end(); ++it) {
+    for (std::vector<STHPayload>::iterator it = STNList.begin(); it != STNList.end(); ++it) {
 	if(!strcmp((*it).fname, stnFname)){
 
 	    //delete the file first
@@ -482,7 +521,7 @@ STH_STATUS SmartThumbnail::createPayload(char* uploadFname)
 
     std::unique_lock<std::mutex> lock(stnMutex);
     if( STNList.size() != 0) { 
-    	for (vector<STHPayload>::iterator it = STNList.begin(); it != STNList.end(); ++it) {
+    	for (std::vector<STHPayload>::iterator it = STNList.begin(); it != STNList.end(); ++it) {
        	    if(!strcmp((*it).fname, uploadFname)){
 		memset(&payload, 0 , sizeof(STHPayload));
 		memcpy(&payload, &(*it), sizeof(STHPayload));
@@ -527,7 +566,7 @@ bool SmartThumbnail::getUploadStatus()
 /** @description: set upload status.
  *  @param[in] : status
  *  @return: STH_SUCCESS on success, STH_ERROR otherwise
- */ 
+ */
 STH_STATUS SmartThumbnail::setUploadStatus(bool status)
 {
     {
@@ -602,7 +641,7 @@ cv::Rect SmartThumbnail::getRelativeBoundingBox(cv::Rect boundRect, cv::Size cro
     // to find the relative x-ordinate and width of the bounding box in the smart thumbnail image
     if (boundRect.width >= cropSize.width) {
 	newBBox.x = 0;
-	newBBox.width = cropSize.width; // restrict the width of the relative bounding box to width of the final cropped image 
+	newBBox.width = cropSize.width; // restrict the width of the relative bounding box to width of the final cropped image
     }
     else {
 	float deltaX = allignedCenter.x - boundRect.x;
@@ -656,7 +695,7 @@ cv::Size SmartThumbnail::getCropSize(cv::Rect boundRect,double w,double h) {
 #if 0
     // always ensure the minimum size of the crop size window is {w, h}
     sz.height = STN_MAX(h,(newHeight* adjustFactor));
-    sz.width = STN_MAX(w,(newWidth* adjustFactor)); 
+    sz.width = STN_MAX(w,(newWidth* adjustFactor));
 #endif
     sz.height = h;
     sz.width = w;
@@ -692,29 +731,58 @@ STH_STATUS SmartThumbnail::notify( const char* status)
  */
 STH_STATUS SmartThumbnail::destroy()
 {
-    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) destroy smart thumbnail!!!\n", __FUNCTION__ , __LINE__ );
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) destroy smart thumbnail\n", __FUNCTION__ , __LINE__ );
 
     //Exit the rtmessage receive and upload thread.
     //rtmessageSTHThreadExit =  true;
     //uploadSTHThreadExit = true;
 
-    if (hres_frame_info) {
-	free(hres_frame_info);
-	hres_frame_info = NULL;
+	STH_STATUS ret = STH_SUCCESS;
+
+#ifdef _HAS_XSTREAM_
+#ifdef _DIRECT_FRAME_READ_
+    if( (NULL != consumer) && (STH_ERROR != consumer->RAWClose()) ){
+#else
+    //Destroy the curl handle
+    if( (NULL != consumer) && (STH_ERROR != consumer->RAWClose(frameHandler.curl_handle)) ){
+#endif
+        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) StreamClose Successful\n", __FUNCTION__ , __LINE__);
+    }
+    else{
+        RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) StreamClose Failed\n", __FUNCTION__ , __LINE__);
+        ret = STH_ERROR;
     }
 
-    //Delete the smart thumbnail instance
-    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Deleting the smart thumbnail instance!!!\n", __FUNCTION__ , __LINE__);
-    if (smartThInst) {
-	delete smartThInst;
-	smartThInst =NULL;
+    //Destroy the XStreamerConsumer instance
+    if(consumer){
+        delete consumer;
+        consumer = NULL;
     }
 
-#ifdef LEGACY_CFG_MGR
-    config_release();
+	frameInfo = NULL;
+#ifndef _DIRECT_FRAME_READ_
+	frameHandler.curl_handle = NULL;
+	frameHandler.sockfd = -1;
+#endif
+#else
+	if (hres_frame_info) {
+		free(hres_frame_info);
+		hres_frame_info = NULL;
+	}
 #endif
 
-    return STH_SUCCESS;
+	//Delete the smart thumbnail instance
+	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Deleting the smart thumbnail instance!!!\n", __FUNCTION__ , __LINE__);
+	if (smartThInst) {
+		delete smartThInst;
+		smartThInst =NULL;
+	}
+
+#ifdef LEGACY_CFG_MGR
+	config_release();
+#endif
+
+	return ret;
 }
 
 /** @description    : Callback function to generate smart thumbnail based on motion.
@@ -775,7 +843,6 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
     rtMessage_GetString(req, "clipname" , &cvrClipFname);
     rtMessage_GetString(req, "eventTimeStamp" , &cvrEvtTstamp);
 
- 
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d CVR clip status: %d\n", __FUNCTION__, __LINE__, clipGenStatus);
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d CVR clip name: %s\n", __FUNCTION__, __LINE__, cvrClipFname);
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d CVR event timestamp: %s\n", __FUNCTION__, __LINE__, cvrEvtTstamp);
@@ -959,7 +1026,7 @@ void SmartThumbnail::onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const
 #endif
 
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d)  strFramePTS:%s \n", __FUNCTION__ , __LINE__, strFramePTS);
-    
+
     // read the message received
     (void) closure;
     rtMessage m;
@@ -976,12 +1043,6 @@ void SmartThumbnail::onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const
 
     rtMessage_Release(m);
 
-
-    if (NULL == smartThInst -> hres_frame_info) {
-        RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):High Res YUV Frame malloc error \n", __FUNCTION__ , __LINE__);
-    }
-    memset(smartThInst -> hres_frame_info, 0, sizeof(RDKC_PLUGIN_YUVInfo));
-
 /*
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Last Motion time stamp: %d\n", __FUNCTION__ , __LINE__, smartThInst->motion_time);
     // ignore frames and metadata for event_quiet_time
@@ -993,14 +1054,36 @@ void SmartThumbnail::onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const
 */
 
     //read the 720*1280 YUV data.
-    ret = smartThInst -> recorder -> ReadYUVData(STN_HRES_BUFFER_ID, smartThInst -> hres_frame_info);
-    if( STH_SUCCESS != ret) {
-        RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Error Reading High Res YUV Frame  \n", __FUNCTION__, __LINE__);
-	smartThInst->isHresFrameReady = false;
-	return;
-    }
+#ifdef _HAS_XSTREAM_
 
-    hResFramePTS = smartThInst -> hres_frame_info -> mono_pts;
+#ifdef _DIRECT_FRAME_READ_
+    ret = smartThInst->consumer->ReadRAWFrame((u16)STN_HRES_BUFFER_ID, (u16)FORMAT_YUV, smartThInst->frameInfo);
+#else
+    ret = smartThInst->consumer->ReadRAWFrame(STN_HRES_BUFFER_ID, FORMAT_YUV, smartThInst->frameInfo);
+#endif
+
+#else
+    if (NULL == smartThInst -> hres_frame_info) {
+        RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):High Res YUV Frame malloc error \n", __FUNCTION__ , __LINE__);
+    }
+    memset(smartThInst -> hres_frame_info, 0, sizeof(RDKC_PLUGIN_YUVInfo));
+
+    ret = smartThInst -> recorder -> ReadYUVData(STN_HRES_BUFFER_ID, smartThInst -> hres_frame_info);
+#endif
+
+	if( STH_SUCCESS != ret) {
+		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Error Reading High Res YUV Frame return status is %d \n", __FUNCTION__, __LINE__, ret);
+		smartThInst->isHresFrameReady = false;
+		return;
+	}
+	//RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Success in Reading High Res YUV Frame return status is %d \n", __FUNCTION__, __LINE__, ret);
+
+#ifdef _HAS_XSTREAM_
+    hResFramePTS = smartThInst->frameInfo->mono_pts;
+#else
+    hResFramePTS = smartThInst->hres_frame_info->mono_pts;
+#endif
+
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): hResframePTS:%llu\n", __FUNCTION__, __LINE__, hResFramePTS);
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Time gap (hResFramePTS - lResframePTS):%llu\n", __FUNCTION__, __LINE__, (hResFramePTS - lResFramePTS));
 
@@ -1209,6 +1292,24 @@ void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t bounding
     snprintf(tmpFname, sizeof(tmpFname), "%llu.jpg", ofData.currTime);
 #endif
 
+#ifdef _HAS_XSTREAM_
+    smartThInst -> hres_y_height = smartThInst -> frameInfo->height;
+    smartThInst -> hres_y_width = smartThInst -> frameInfo->width;
+    smartThInst -> hres_y_size = smartThInst -> frameInfo->width * smartThInst -> frameInfo->height;
+    smartThInst -> hres_uv_size = smartThInst -> frameInfo->width * smartThInst -> frameInfo->height/2;
+    hres_yuvData = (unsigned char *) malloc((smartThInst -> hres_y_size + smartThInst -> hres_uv_size) * sizeof(unsigned char));
+
+    if( NULL == hres_yuvData){
+        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) malloc failed for hres_yuvData.\n", __FUNCTION__ , __LINE__);
+    }
+
+    memset( hres_yuvData, 0, (smartThInst -> hres_y_size + smartThInst -> hres_uv_size) * sizeof(unsigned char) );
+    memcpy( hres_yuvData, smartThInst -> frameInfo->y_addr, smartThInst -> hres_y_size);
+    memcpy( hres_yuvData + smartThInst -> hres_y_size, smartThInst -> frameInfo->uv_addr, smartThInst -> hres_uv_size);
+
+    //Full 720*1280 frame containing max bounding box
+    ofData.maxBboxObjYUVFrame = cv::Mat(smartThInst -> frameInfo -> height + (smartThInst -> frameInfo -> height)/2, smartThInst -> frameInfo -> width, CV_8UC1, hres_yuvData).clone();
+#else
     smartThInst -> hres_y_height = smartThInst -> hres_frame_info->height;
     smartThInst -> hres_y_width = smartThInst -> hres_frame_info->width;
     smartThInst -> hres_y_size = smartThInst -> hres_frame_info->width * smartThInst -> hres_frame_info->height;
@@ -1225,6 +1326,7 @@ void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t bounding
 
     //Full 720*1280 frame containing max bounding box
     ofData.maxBboxObjYUVFrame = cv::Mat(smartThInst -> hres_frame_info -> height + (smartThInst -> hres_frame_info -> height)/2, smartThInst -> hres_frame_info -> width, CV_8UC1, hres_yuvData).clone();
+#endif
 
     if(hres_yuvData) {
 	free(hres_yuvData);

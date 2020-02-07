@@ -50,8 +50,14 @@ extern "C" {
 #include "rtLog.h"
 #include "rtMessage.h"
 #include "HttpClient.h"
+
+#ifdef _HAS_XSTREAM_
+#include "xStreamerConsumer.h"
+#else
 #include "RdkCVideoCapturer.h"
 #include "RdkCPluginFactory.h"
+#endif
+
 #include "RFCCommon.h"
 #include "opencv2/opencv.hpp"
 
@@ -62,10 +68,12 @@ extern "C" {
 #define YUV_HRES_FRAME_WIDTH		1280
 #define YUV_HRES_FRAME_HEIGHT		720
 
-#ifndef XCAM2
-#define STN_HRES_BUFFER_ID		0
+#ifdef XCAM2
+#define STN_HRES_BUFFER_ID              2
+#elif XHB1
+#define STN_HRES_BUFFER_ID              2
 #else
-#define STN_HRES_BUFFER_ID		2
+#define STN_HRES_BUFFER_ID              0
 #endif
 
 //actual width and height of smart thumbnail to be uploaded
@@ -125,7 +133,7 @@ class SmartThumbnail
 	STH_STATUS init();
 	//Pushes the data to the upload queue at the end of interval.
 	STH_STATUS createPayload();
-	//Upload smart thumbnail data 
+	//Upload smart thumbnail data
 	void uploadPayload(time_t timeLeft);
 	//notify start or end of smart thumbnail process
 	STH_STATUS notify(const char* status);
@@ -160,7 +168,7 @@ class SmartThumbnail
 
 	//Thread routine to receive data
 	static void receiveRtmessage();
-	//Callback function for dynamic logging. 
+	//Callback function for dynamic logging.
 	static void dynLogOnMessage(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 
 	cv::Point2f getActualCentroid(cv::Rect boundRect);
@@ -169,11 +177,20 @@ class SmartThumbnail
 	cv::Rect getRelativeBoundingBox(cv::Rect boundRect, cv::Size cropSize, cv::Point2f allignedCenter);
 
 	static SmartThumbnail* smartThInst;
-	RdkCPluginFactory* pluginFactory;
 	int g_hres_buf_id;
+   	bool hres_yuvDataMemoryAllocationDone;
+
+#ifdef _HAS_XSTREAM_
+	XStreamerConsumer* consumer;
+#ifndef _DIRECT_FRAME_READ_
+	curlInfo frameHandler;
+#endif
+	frameInfoYUV  *frameInfo;
+#else
+	RdkCPluginFactory* pluginFactory;
 	RdkCVideoCapturer* recorder;
 	RDKC_PLUGIN_YUVInfo* hres_frame_info;
-	bool hres_yuvDataMemoryAllocationDone;
+#endif
 
 	std::thread rtMessageReceive;
 	std::thread uploadThread;

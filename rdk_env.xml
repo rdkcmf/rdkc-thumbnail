@@ -21,7 +21,7 @@
 <environment>
   <components>
     <thumbnail>
-      <dependencies>sdk,rdklogger,video-analytics,utility,sysapps,sysint</dependencies>
+      <dependencies>sdk,rdklogger,video-analytics,utility,sysapps,sysint,camera-hal</dependencies>
     </thumbnail>
   </components>
 </environment>

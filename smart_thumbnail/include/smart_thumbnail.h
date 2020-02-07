@@ -52,8 +52,14 @@ extern "C" {
 #include "rtLog.h"
 #include "rtMessage.h"
 #include "HttpClient.h"
+
+#ifdef _HAS_XSTREAM_
+#include "xStreamerConsumer.h"
+#else
 #include "RdkCVideoCapturer.h"
 #include "RdkCPluginFactory.h"
+#endif
+
 #include "opencv2/opencv.hpp"
 
 #define CACHE_SMARTTHUMBNAIL "/tmp/cache_smart_thumbnail.txt"
@@ -147,7 +153,7 @@ class SmartThumbnail
 	bool getUploadStatus();
 	//set upload status
 	STH_STATUS setUploadStatus(bool status);
-	//Upload smart thumbnail data 
+	//Upload smart thumbnail data
 	void uploadPayload();
 	//notify start or end of smart thumbnail process
 	STH_STATUS notify(const char* status);
@@ -204,9 +210,18 @@ class SmartThumbnail
         static volatile bool tnUploadConfRefreshed;
 
 	static SmartThumbnail* smartThInst;
-	RdkCPluginFactory* pluginFactory;
+
+#ifdef _HAS_XSTREAM_
+    XStreamerConsumer* consumer;
+    frameInfoYUV  *frameInfo;
+#ifndef _DIRECT_FRAME_READ_
+    curlInfo frameHandler;
+#endif
+#else
 	RdkCVideoCapturer* recorder;
+	RdkCPluginFactory* pluginFactory;
 	RDKC_PLUGIN_YUVInfo* hres_frame_info;
+#endif
 	//static bool hres_yuvDataMemoryAllocationDone;
 
 	bool logMotionEvent;
@@ -230,7 +245,7 @@ class SmartThumbnail
 	int hres_y_width;
 	bool isHresFrameReady;
 	std::vector<STHPayload> STNList;
-	bool cvrClipGenStarted; 
+	bool cvrClipGenStarted;
 
 	HttpClient* httpClient;
 	int dnsCacheTimeout;

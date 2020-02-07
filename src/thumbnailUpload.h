@@ -40,8 +40,11 @@ extern "C" {
 #endif
 #include "dev_config.h"
 #include "polling_config.h"
+#include "sysUtils.h"
+#ifndef OSI 
 #include "cgi_image.h"
 #include "SYS_log.h"
+#endif
 #ifdef USE_MFRLIB
 #include "mfrApi.h"
 #endif

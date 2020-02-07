@@ -23,6 +23,9 @@ USE_RFCCONFIG = yes
 USE_CONFIGMGR = yes
 USE_RTMESSAGE = yes
 SUPPORT_MXML = yes
+USE_MFRLIB = yes
+USE_SYSUTILS = yes
+USE_CONFIGUTILS = yes
 USE_LIBSYSWRAPPER =yes
 
 include ${RDK_PROJECT_ROOT_PATH}/utility/AppsRule.mak
@@ -32,7 +35,10 @@ ifeq ($(XCAM_MODEL), SCHC2)
 CFLAGS += -DUSE_MFRLIB
 CFLAGS += -DXCAM2
 endif
-
+ifeq ($(XCAM_MODEL), XHB1)
+CFLAGS += -DUSE_MFRLIB
+CFLAGS += -DOSI
+endif
 SRCS   += thumbnailUpload.cpp
 SRCS   += thumbnail_upload_main.cpp
 
