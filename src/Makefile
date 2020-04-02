@@ -23,6 +23,7 @@ USE_RFCCONFIG = yes
 USE_CONFIGMGR = yes
 USE_RTMESSAGE = yes
 SUPPORT_MXML = yes
+USE_LIBSYSWRAPPER =yes
 
 include ${RDK_PROJECT_ROOT_PATH}/utility/AppsRule.mak
 

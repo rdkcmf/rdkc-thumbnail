@@ -19,7 +19,10 @@
 ##########################################################################
 */
 #include "thumbnailUpload.h"
-
+extern "C"
+{
+#include "secure_wrapper.h"
+}
 ThumbnailUpload *ThumbnailUpload::thumbnailUpload = NULL;
 int  ThumbnailUpload::tn_upload_interval = DEFAULT_THUMBNAIL_UPLOAD_PASSIVE_INTERVAL;
 bool ThumbnailUpload::tn_upload_enable = DEFAULT_THUMBNAIL_UPLOAD_ENABLE;
@@ -722,9 +725,10 @@ int ThumbnailUpload::uploadThumbnailImage()
 
 #else
 	/* Generate thumbnail image using snapshooter utility */
-	snprintf(cmd,sizeof(cmd)-1, "snapshooter -f %s %s >/dev/null 2>/dev/null", gcpThumbnailSnapshotPath, gcpSnapshooterOpt);
+	//snprintf(cmd,sizeof(cmd)-1, "snapshooter -f %s %s >/dev/null 2>/dev/null", gcpThumbnailSnapshotPath, gcpSnapshooterOpt);
 
-	ret_jpeg = system(cmd);
+	//ret_jpeg = system(cmd);
+         ret_jpeg = v_secure_system("snapshooter -f %s %s >/dev/null 2>/dev/null", gcpThumbnailSnapshotPath, gcpSnapshooterOpt);
 	if(-1 == ret_jpeg)
 	{
 		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): system call - snapshooter failed!\n", __FILE__, __LINE__);

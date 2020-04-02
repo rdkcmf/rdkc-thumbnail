@@ -22,6 +22,7 @@ USE_OPENCV = yes
 USE_HTTPCLIENT = yes
 USE_CONFIGMGR = yes
 USE_RTMESSAGE = yes
+USE_LIBSYSWRAPPER = yes
 USE_PLUGINS = yes
 
 include ${RDK_PROJECT_ROOT_PATH}/utility/AppsRule.mak
