@@ -137,6 +137,8 @@ class SmartThumbnail
 	~SmartThumbnail();
 	STH_STATUS getTnUploadConf();
 	STH_STATUS getEventConf();
+	//to update the event quiet interval
+	int getQuietInterval();
 	//sets the camera firmware version.
 	int setCameraImageName(char* out);
 	//sets the camera firmware version.
