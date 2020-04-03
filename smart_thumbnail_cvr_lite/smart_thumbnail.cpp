@@ -334,6 +334,60 @@ STH_STATUS SmartThumbnail::getEventConf()
     return STH_SUCCESS;
 }
 
+/** @description: retrieve event quiet interval
+ *  @param[in] : void
+ *  @return: event quiet interval
+ */
+int SmartThumbnail::getQuietInterval()
+{
+	int quiet_interval =smartThInst -> event_quiet_time;
+	events_provision_info_t *eventsCfg = NULL;
+
+	// Allocate memory for event config
+	eventsCfg = (events_provision_info_t*) malloc(sizeof(events_provision_info_t));
+
+	if (NULL == eventsCfg) {
+		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error allocating memory. Use existing quiet interval %d\n", __FILE__, __LINE__, quiet_interval);
+		return quiet_interval;
+	}
+
+	if (STH_SUCCESS != polling_config_init()) {
+		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error initializing polling config. Use existing quiet interval %d\n", __FILE__, __LINE__, quiet_interval);
+		if (eventsCfg) {
+			free(eventsCfg);
+		}
+		return quiet_interval;
+	}
+
+	if (STH_SUCCESS != readEventConfig(eventsCfg)) {
+		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error reading EVENTS Config. Use existing quiet interval %d\n", __FILE__, __LINE__, quiet_interval);
+		return quiet_interval;
+	}
+
+	// get event quiet interval
+	if (strlen(eventsCfg->quite_interval) > 0) {
+		quiet_interval = atoi(eventsCfg->quite_interval);
+	}
+	else {
+		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Invalid Quiet Interval. Use existing quiet interval %d\n", __FILE__, __LINE__, quiet_interval);
+		return quiet_interval;
+
+	}
+
+	if (smartThInst -> event_quiet_time != quiet_interval) {
+		RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Retrieved New Quiet Interval: %d %d\n", __FILE__, __LINE__, smartThInst -> event_quiet_time, quiet_interval);
+	}
+
+	if (eventsCfg) {
+		free(eventsCfg);
+		eventsCfg = NULL;
+	}
+
+	polling_config_exit();
+
+	return quiet_interval;
+}
+
 /** @description: create the payload for smart thumbnail
  *  @param[in] : void
  *  @return: STH_SUCCESS on success, STH_ERROR otherwise
@@ -353,6 +407,10 @@ STH_STATUS SmartThumbnail::createPayload()
     struct tm* tv = NULL;
     struct timespec currTime;
 #endif
+
+	// update the event quiet interval
+	smartThInst -> event_quiet_time = getQuietInterval();
+
     {
 	//Acquire lock
 	std::unique_lock<std::mutex> lock(smartThInst -> QMutex);
