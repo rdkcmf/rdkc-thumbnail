@@ -33,6 +33,7 @@
 #include <gst/app/gstappsink.h>
 #include <gst/base/gstbasesrc.h>
 #include <opencv2/opencv.hpp>
+#include <opencv2/imgproc/types_c.h>
 
 #include <time.h>
 #include <sys/time.h>
