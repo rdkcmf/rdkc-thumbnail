@@ -27,6 +27,9 @@ int main(int argc, char** argv)
 	SmartThumbnail *smTnInstance = NULL;
 	STH_STATUS status = STH_SUCCESS;
         time_t remainingTime = 0;
+	char *param = NULL;
+    	const char* debugConfigFile = "/etc/debug.ini";
+    	int  cvrEnabled = 0;
 
 	struct timespec currTime;
 	struct timespec startTime;
@@ -35,9 +38,53 @@ int main(int argc, char** argv)
 
 	signal(SIGTERM, SmartThumbnail::sigHandler);
 	signal(SIGINT, SmartThumbnail::sigHandler);
+	int itr =0;
+
+    	while (itr < argc)
+    	{
+                if(strcmp(argv[itr],"--debugconfig")==0)
+                {
+                        itr++;
+                        if (itr < argc)
+                        {
+                                debugConfigFile = argv[itr];
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+                if(strcmp(argv[itr],"--hw-mac")==0)
+                {
+                        itr++;
+                        if (itr < argc)
+                        {
+                                param = argv[itr];
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+
+                if(strcmp(argv[itr],"--cvrEnabled")==0)
+                {
+                        itr++;
+
+                        if (itr < argc)
+                        {
+                                cvrEnabled = atoi(argv[itr]);
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+                itr++;
+    	}
 
 	//initialize rdklogger
-	rdk_logger_init("/etc/debug.ini");
+	rdk_logger_init(debugConfigFile);
 
 	//create instance
 	smTnInstance = SmartThumbnail::getInstance();
@@ -47,7 +94,7 @@ int main(int argc, char** argv)
 	}
 
 	//initialize smart thumbnail
-	status = smTnInstance-> init();
+	status = smTnInstance-> init(param,cvrEnabled);
 	if (STH_ERROR == status) {
     	    RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error creating Smart thumbnail instance.\n", __FILE__, __LINE__);
 	    return STH_ERROR;

@@ -38,6 +38,11 @@ SmartThumbnail::SmartThumbnail():
 #else
 				recorder(NULL),
 #endif
+#ifdef _HAS_DING_
+				m_ding(NULL),
+				m_dingNotif(false),
+				m_dingTime(0),
+#endif				
 				httpClient(NULL),
 				hres_y_size(0),
 				hres_uv_size(0),
@@ -49,6 +54,7 @@ SmartThumbnail::SmartThumbnail():
 				uploadReady(false),
 				isPayloadAvailable(false),
 				cvrClipGenStarted(false),
+				cvrEnabled(false),
 				dnsCacheTimeout(STN_DEFAULT_DNS_CACHE_TIMEOUT),
 				sTnHeight(STN_DEFAULT_HEIGHT),
 				sTnWidth(STN_DEFAULT_WIDTH)
@@ -57,6 +63,9 @@ SmartThumbnail::SmartThumbnail():
     memset(smtTnUploadURL, 0, sizeof(smtTnUploadURL));
     memset(smtTnAuthCode, 0, sizeof(smtTnAuthCode));
     memset(currSTNFname, 0, sizeof(currSTNFname));
+    memset(modelName, 0, sizeof(modelName));
+    memset(macAddress, 0, sizeof(macAddress));
+    memset(firmwareName, 0, sizeof(firmwareName));
 #ifdef _HAS_XSTREAM_
 #ifndef _DIRECT_FRAME_READ_
 	frameHandler = {NULL, -1};
@@ -104,7 +113,7 @@ SmartThumbnail *SmartThumbnail::getInstance()
  *  @param[in] void
  *  @return: STH_SUCCESS on success, STH_ERROR otherwise
  */
-STH_STATUS SmartThumbnail::init()
+STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled)
 {
 
 #ifdef LEGACY_CFG_MGR
@@ -153,21 +162,20 @@ STH_STATUS SmartThumbnail::init()
 #endif
 
     // update mac/model/camera image
-#if 0
-    memset(modelName, 0, sizeof(modelName));
-    memset(macAddress, 0, sizeof(macAddress));
-    memset(firmwareName, 0,sizeof(firmwareName));
-    setMacAddress();
-    setModelName();
+    setMacAddress(macAddress);
+    setModelName(modelName);
     setCameraImageName(firmwareName);
-#endif
 
+    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart_thumbnail macAddress: %s modelName=%s firmwareName=%s \n",__FUNCTION__, __LINE__,macAddress,modelName,firmwareName);
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart_thumbnail upload URL: %s \n",__FUNCTION__, __LINE__,smtTnUploadURL);
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart_thumbnail auth code: %s \n",__FUNCTION__, __LINE__,smtTnAuthCode);
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart_thumbnail event quiet time: %d \n",__FUNCTION__, __LINE__,event_quiet_time);
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart_thumbnail height: %d \n",__FUNCTION__, __LINE__,sTnHeight);
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart_thumbnail width: %d \n",__FUNCTION__, __LINE__,sTnWidth);
-
+#ifdef _HAS_DING_
+    m_ding = DingNotification::getInstance();
+    m_ding->init(modelName,macAddress,firmwareName);
+#endif
 #ifdef _HAS_XSTREAM_
     //Create the consumer class object
     consumer = new XStreamerConsumer;
@@ -225,7 +233,7 @@ STH_STATUS SmartThumbnail::init()
     } else {
 	RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to open the URL\n", __FUNCTION__, __LINE__);
     }
-
+    cvrEnabled = isCvrEnabled; 
     rtMsgInit();
 
     //Initialize upload routine
@@ -409,7 +417,6 @@ STH_STATUS SmartThumbnail::saveSTN()
             //imwrite(fPath, resizedRGBMat);
             imwrite(fPath, croppedObj);
 #endif
-
 	    ret = STH_SUCCESS;
     	}
 
@@ -777,7 +784,10 @@ STH_STATUS SmartThumbnail::destroy()
 		delete smartThInst;
 		smartThInst =NULL;
 	}
-
+#ifdef _HAS_DING_
+	if(m_ding)
+		delete m_ding;	
+#endif
 #ifdef LEGACY_CFG_MGR
 	config_release();
 #endif
@@ -785,6 +795,43 @@ STH_STATUS SmartThumbnail::destroy()
 	return ret;
 }
 
+#ifdef _HAS_DING_
+/** @description    : Callback function to generate ding notification and smartthumbnail.
+ *  @param[in]  hdr : constant pointer rtMessageHeader
+ *  @param[in] buff : constant pointer uint8_t
+ *  @param[in]    n : uint32_t
+ *  @param[in] closure : void pointer
+ *  @return: void
+ */
+
+void SmartThumbnail::onDingNotification(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure)
+{
+    char const*  status = NULL;
+    
+    rtConnection con = (rtConnection) closure;
+    int doorbell_state =0;
+    rtMessage req;
+    rtMessage_FromBytes(&req, buff, n);
+    rtMessage_GetInt32(req, "doorbell_press", &doorbell_state);
+
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","(%s):%d doorbell_state:%d\n", __FUNCTION__, __LINE__, doorbell_state);
+    
+    if(doorbell_state)
+    {
+	struct timespec currTime;
+	memset (&currTime, 0, sizeof(struct timespec));
+    	clock_gettime(CLOCK_REALTIME, &currTime);
+	
+	if((currTime.tv_sec - smartThInst ->m_dingTime) > smartThInst->m_ding->getQuiteTime())
+	{
+	   smartThInst ->m_dingTime = currTime.tv_sec;
+	   smartThInst -> m_dingNotif = true;
+	   smartThInst->m_ding->signalDing(true,smartThInst ->m_dingTime);
+	}
+    }
+    rtMessage_Release(req);
+}
+#endif
 /** @description    : Callback function to generate smart thumbnail based on motion.
  *  @param[in]  hdr : constant pointer rtMessageHeader
  *  @param[in] buff : constant pointer uint8_t
@@ -1376,7 +1423,9 @@ STH_STATUS SmartThumbnail::rtMsgInit()
     rtConnection_AddListener(connectionRecv, "RDKC.CVR.CLIP.STATUS",onMsgCvr, NULL);
     rtConnection_AddListener(connectionRecv, "RDKC.CVR.UPLOAD.STATUS",onMsgCvrUpload, NULL);
     rtConnection_AddListener(connectionRecv, "RDKC.CONF.TNUPLOAD.REFRESH",onMsgRefreshTnUpload, NULL);
-
+#ifdef _HAS_DING_
+    rtConnection_AddListener(connectionRecv, "RDKC.BUTTON.DOORBELL",onDingNotification, NULL);
+#endif
     //Add listener for dynamic log topics
     rtConnection_AddListener(connectionRecv, RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC, dynLogOnMessage, connectionRecv);
 
@@ -1432,9 +1481,6 @@ void SmartThumbnail::uploadPayload()
 {
     int curlCode = 0;
     long response_code = 0;
-    char modelName[CONFIG_STRING_MAX] = {0};
-    char macAddress[CONFIG_STRING_MAX] = {0};
-    char firmwareName[FW_NAME_MAX_LENGTH] = {0};
 #ifdef USE_FILE_UPLOAD
     char *data  = NULL;
     struct stat fileStat;
@@ -1460,10 +1506,6 @@ void SmartThumbnail::uploadPayload()
     struct timespec startTime;
     memset(&startTime, 0, sizeof(startTime));
     memset(&currTime, 0, sizeof(currTime));
-
-    setMacAddress(macAddress);
-    setModelName(modelName);
-    setCameraImageName(firmwareName);
 
     //clock the start time
     clock_gettime(CLOCK_REALTIME, &startTime);

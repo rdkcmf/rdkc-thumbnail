@@ -18,7 +18,7 @@
 ##########################################################################
 
 # Add dependent libraries
-USE_OPENCV = yes
+#USE_OPENCV = yes
 USE_HTTPCLIENT = yes
 USE_RFCCONFIG = yes
 USE_RTMESSAGE = yes
@@ -28,7 +28,10 @@ USE_LIBSYSWRAPPER = yes
 
 ifeq ($(XCAM_MODEL), XHB1)
 CFLAGS  += -DXHB1
+#CFLAGS  += -D_HAS_DING_
 USE_DEWARP = yes
+#SRC += ../ding/DingNotification.cpp
+#CFLAGS  += -I../ding
 else
 SUPPORT_MXML = yes
 endif
@@ -65,14 +68,14 @@ CFLAGS  += -D_HAS_XSTREAM_
 ifeq ($(ENABLE_DIRECT_FRAME_READ), true)
 $(info( '*************DIRECT READ FRAME ENABLED**************')
 CFLAGS   += -D_DIRECT_FRAME_READ_
+endif
+endif
+LIBS    += -L$(RDK_PROJECT_ROOT_PATH)/opensource/lib  -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs
 LIBS    += -Wl,-rpath-link=$(PROJ_ROOT)/vendor/img/fs/shadow_root/usr/lib
-endif
-
-endif
-
 CFLAGS += -DUSE_MFRLIB
 
 SRC += smart_thumbnail.cpp main.cpp
+
 OBJ = $(SRC:.cpp=.o)
 
 TARGET = smartthumbnail

@@ -59,6 +59,9 @@ extern "C" {
 #include "RdkCVideoCapturer.h"
 #include "RdkCPluginFactory.h"
 #endif
+#ifdef _HAS_DING_
+#include "DingNotification.h"
+#endif
 
 #include "opencv2/opencv.hpp"
 
@@ -134,6 +137,9 @@ typedef enum {
 typedef struct {
     char fname[64];
     uint64_t tstamp;
+#ifdef _HAS_DING_
+    uint64_t dingtstamp;
+#endif
 }STHPayload;
 
 typedef struct {
@@ -150,7 +156,7 @@ class SmartThumbnail
     public:
 	static SmartThumbnail* getInstance();
 	//Initialize the buffers and starts msg monitoring, upload thread.
-	STH_STATUS init();
+	STH_STATUS init(char* mac,bool isCVREnabled);
 	//get upload status
 	bool getUploadStatus();
 	//set upload status
@@ -226,7 +232,12 @@ class SmartThumbnail
 	RDKC_PLUGIN_YUVInfo* hres_frame_info;
 #endif
 	//static bool hres_yuvDataMemoryAllocationDone;
-
+#ifdef _HAS_DING_
+	DingNotification* m_ding;
+	bool m_dingNotif;
+	uint64_t m_dingTime;
+	static void onDingNotification(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+#endif
 	bool logMotionEvent;
 
 	bool uploadReady;
@@ -249,12 +260,11 @@ class SmartThumbnail
 	bool isHresFrameReady;
 	std::vector<STHPayload> STNList;
 	bool cvrClipGenStarted;
-
+	bool cvrEnabled;
 	HttpClient* httpClient;
 	int dnsCacheTimeout;
 	STHPayload currSTN;
 	STHPayload payload;
-
 	uint64_t motion_time;
 	int32_t event_quiet_time;
 
@@ -265,6 +275,9 @@ class SmartThumbnail
 	int sTnWidth;
 	char uploadFname[CONFIG_STRING_MAX];
 	char currSTNFname[CONFIG_STRING_MAX];
+	char modelName[CONFIG_STRING_MAX];
+    	char macAddress[CONFIG_STRING_MAX];
+    	char firmwareName[FW_NAME_MAX_LENGTH];
 	static int waitingInterval;
 	cv::Rect relativeBBox;
 };

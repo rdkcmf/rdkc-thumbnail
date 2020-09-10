@@ -33,6 +33,7 @@ bool ThumbnailUpload::isActiveInterval = false;
 char ThumbnailUpload::fw_name[FW_NAME_MAX_LENGTH] = "";
 char ThumbnailUpload::ver_num[VER_NUM_MAX_LENGTH] = "";
 char ThumbnailUpload::mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN+1] = "";
+char ThumbnailUpload::modelName[THUMBNAIL_UPLOAD_MAC_STRING_LEN+1] = "";
 unsigned int ThumbnailUpload::activeModeUploadCounter = 0;
 int ThumbnailUpload::uploadRetryCount = 0;
 
@@ -49,6 +50,9 @@ void ThumbnailUpload::rtConnection_init()
   rtConnection_AddListener(con, RTMSG_THUMBNAIL_TOPIC, onMessage, con);
   //Add listener for dynamic log topics
   rtConnection_AddListener(con, RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC, dynLogOnMessage, con);
+#ifdef _HAS_DING_
+  rtConnection_AddListener(con, "RDKC.BUTTON.DOORBELL",onDingNotification, con);
+#endif
 }
 
 /** @description ThumbnailUpload constructor.
@@ -59,6 +63,13 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 				, m_count(0)
 				, json_prov_tn_upload_enabled(-1)
 				, liveCacheConf(NULL)
+				, m_uploadReady(false)
+#ifdef _HAS_DING_
+                                , m_ding(NULL)
+			  	, m_dingNotif(false)
+                                , m_dingTime(0)
+
+#endif
 {
 	char url_string[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH+1];
 	m_smVector.reserve(10);
@@ -97,14 +108,107 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 	{
 		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Failed to open the URL\n", __FILE__, __LINE__);
 	}
-
 	memset(cmd,0,MAXSIZE);
 	snprintf(cmd,sizeof(cmd)-1, "rdkc_snapshooter %s %d %d %d", SNAPSHOT_FILE, COMPRESSION_SCALE, TN_OP_WIDTH, TN_OP_HEIGHT);
 
 	liveCacheConf = (livecache_provision_info_t*) malloc(sizeof(livecache_provision_info_t));
+	int ret = getCameraImageName(fw_name);
+        	
+	if (ret == RDKC_FAILURE)
+	{
+		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera firmware name\n", __FILE__, __LINE__);
+	}
 
+        int ret1 = getCameraVersionNum(ver_num);
+        if (ret1 == RDKC_FAILURE)
+	{
+		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera version num\n", __FILE__, __LINE__);
+	}
+#if !defined ( THUMBNAIL_PLATFORM_RPI )
+#ifdef OSI
+	memset(mac_string, 0, sizeof(mac_string));
+	char mac[CONFIG_STRING_MAX];
+        mfrSerializedData_t stdata = {NULL, 0, NULL};
+        mfrSerializedType_t stdatatype = mfrSERIALIZED_TYPE_DEVICEMAC;
+        
+        if(mfrGetSerializedData(stdatatype, &stdata) == mfrERR_NONE)
+        {       
+                strncpy(mac,stdata.buf,stdata.bufLen);
+                mac[stdata.bufLen] = '\0';
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac= %s,%s,%d\n",__FILE__, __LINE__,mac,stdata.buf,stdata.bufLen);
+                
+                char tmpMac[CONFIG_STRING_MAX+1];
+                char *tmpField;
+                int fieldNum=0;
+                
+                strcpy(tmpMac, mac);
+                tmpField = strtok(tmpMac, ":");
+                
+                while (tmpField != NULL && fieldNum < 6)
+                {       
+                     char *chk;
+                     unsigned long tmpVal;
+                        
+                     tmpVal = strtoul(tmpField, &chk, 16);
+                        
+                      if (tmpVal > 0xff)
+                      {       
+                            RDK_LOG( RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","field %d value %0x out of range\n", fieldNum, tmpVal);
+                      }
+                      if (*chk != 0)
+                      {       
+                            RDK_LOG( RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","Non-digit character %c (%0x) detected in field %d\n", *chk, *chk, fieldNum);
+                      }
+                        
+                      fieldNum++;
+                      strcat(mac_string, tmpField);
+                      tmpField = strtok(NULL, ":");
+               	}
+                mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN+1] = '\0';
+                
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac address= %s\n",__FILE__, __LINE__,mac_string);
+                if (stdata.freeBuf != NULL)
+                {       
+                       	stdata.freeBuf(stdata.buf);
+                       	stdata.buf = NULL;
+                }
+        }                
+
+	stdata = {NULL, 0, NULL};
+        stdatatype = mfrSERIALIZED_TYPE_MODELNAME;
+        if(mfrGetSerializedData(stdatatype, &stdata) == mfrERR_NONE)
+        {
+                strncpy(modelName,stdata.buf,stdata.bufLen);
+		modelName[stdata.bufLen] = '\0';
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):Model Name = %s,%s,%d\n",__FILE__, __LINE__,modelName,stdata.buf,stdata.bufLen);
+                if (stdata.freeBuf != NULL)
+                {
+                        stdata.freeBuf(stdata.buf);
+                        stdata.buf = NULL;
+                }
+        }
+        else
+        {
+         	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):GET ModelName failed : %d\n", __FILE__, __LINE__);
+        }
+#else
+	unsigned char macaddr[MAC_ADDR_LEN];
+
+	if (0 == get_mac_address(macaddr)) {
+                memset(mac_string, 0, sizeof(mac_string));
+                transcode_mac_to_string_by_separator(macaddr, '\0', mac_string, XFINITY_MAC_STRING_LEN+1, 0);
+        }
+	else {
+		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera mac address\n", __FILE__, __LINE__);
+		strcpy(mac_string,"No MACADDR");
+	}
+#endif
+#endif
 	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ThumbnailUpload constructor \n", __FILE__, __LINE__);
-	
+#ifdef _HAS_DING_
+        m_ding = DingNotification::getInstance();
+        m_ding->init(modelName,mac_string,fw_name);
+#endif
 }
 
 void ThumbnailUpload::rtConnection_destroy()
@@ -390,6 +494,41 @@ void ThumbnailUpload::TNURegisterSignalHandler(void)
 	 signal(SIGUSR1, TNUSignalHandler);
 }
 
+int ThumbnailUpload::setUploadStatus(bool status)
+{
+    {
+        std::unique_lock<std::mutex> lock(m_uploadMutex);
+        m_uploadReady = status;
+        lock.unlock();
+    }
+
+    m_cv.notify_one();
+    return RDK_SUCCESS;
+}
+
+bool ThumbnailUpload::waitFor(int quiteInterVal)
+{
+    bool isTimedOut = false;
+    {
+        std::unique_lock<std::mutex> lock(m_uploadMutex);
+
+        m_cv.wait_for(lock, std::chrono::seconds(quiteInterVal), [this]{return (m_uploadReady);});
+
+        if(m_uploadReady)
+        {
+          RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due to uploadReady flag!!\n",__FUNCTION__,__LINE__);
+          m_uploadReady = false;
+        }
+        else
+        {
+           isTimedOut = true;
+           RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due to timeout!!\n",__FUNCTION__,__LINE__);
+        }
+        lock.unlock();
+   }
+   return isTimedOut;
+}
+
 /** @description: This function is to set thumbnail upload active interval from user config file
  *
  *  @param: void.
@@ -450,6 +589,26 @@ void ThumbnailUpload::setActiveInterval(void)
 	}
 	isActiveInterval = true;
 
+}
+/**
+ * @description: Convert event date and time to ISO 8601 format.
+ *
+ * @param[in]: strEvtDateTime,evtdatetimeSize, evtDateTime.
+ *
+ * @return: void
+ */
+void ThumbnailUpload::stringifyEventDateTime(char* strEvtDateTime , size_t evtdatetimeSize, time_t evtDateTime)
+{
+        struct tm *tv = NULL;
+
+        if(NULL == strEvtDateTime) {
+                RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.CVRUPLOAD","%s(%d): Using invalid memory location!\n",__FILE__, __LINE__);
+                return;
+        }
+
+        tv = gmtime(&evtDateTime);
+
+        strftime(strEvtDateTime, evtdatetimeSize,"%FT%TZ",tv);
 }
 
 /** @description: This function is to update thumbnail upload active upload duration
@@ -764,7 +923,7 @@ int ThumbnailUpload::uploadThumbnailImage()
 	char url_string[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH+1];
 	long response_code = 0;
 	int ret_jpeg = 0;
-
+	char dTnTStamp[256]={0};
 
 	/* As customer's requirement, not support http */
 	if (!strncasecmp(tn_upload_server_url,"http://", strlen("http://")))
@@ -858,25 +1017,7 @@ int ThumbnailUpload::uploadThumbnailImage()
 	http_client->addHeader( "X-Upload-Speed", pack_head);
         memset(pack_head, 0, sizeof(pack_head));
 #ifdef USE_MFRLIB
-	char modelName[128];
-        mfrSerializedData_t stdata = {NULL, 0, NULL};
-        mfrSerializedType_t stdatatype = mfrSERIALIZED_TYPE_MODELNAME;
-        if(mfrGetSerializedData(stdatatype, &stdata) == mfrERR_NONE)
-        {
-                strncpy(modelName,stdata.buf,stdata.bufLen);
-		modelName[stdata.bufLen] = '\0';
-                RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):Model Name = %s,%s,%d\n",__FILE__, __LINE__,modelName,stdata.buf,stdata.bufLen);
-                if (stdata.freeBuf != NULL)
-                {
-                        stdata.freeBuf(stdata.buf);
-                        stdata.buf = NULL;
-                }
-                snprintf(pack_head, sizeof(pack_head), "Sercomm %s %s %s %s", modelName, fw_name, mac_string, ver_num);
-        }
-        else
-        {
-         	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):GET ModelName failed : %d\n", __FILE__, __LINE__);
-        }
+        snprintf(pack_head, sizeof(pack_head), "Sercomm %s %s %s %s", modelName, fw_name, mac_string, ver_num);
 #else
 
 #if !defined ( THUMBNAIL_PLATFORM_RPI )
@@ -885,7 +1026,18 @@ int ThumbnailUpload::uploadThumbnailImage()
 
 #endif
 	http_client->addHeader( "User-Agent", pack_head);
-
+#ifdef _HAS_DING_	
+	if(thumbnailUpload ->m_dingNotif)
+	{
+            stringifyEventDateTime(dTnTStamp, sizeof(dTnTStamp), thumbnailUpload ->m_dingTime);
+            memset(pack_head, 0, sizeof(pack_head));
+            http_client->addHeader( "X-EVENT-TYPE", "ding");
+            snprintf(pack_head, sizeof(pack_head), "%s", dTnTStamp);
+            http_client->addHeader( "X-EVENT-DATETIME", pack_head);
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Ding: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStamp);
+	    thumbnailUpload ->m_dingTime = 0;
+	}	
+#endif
 	/* Send file to server */
 	ret = postFileToTNUploadServer(tn_upload_file_name, file_len, url_string, &response_code);
 
@@ -893,9 +1045,25 @@ int ThumbnailUpload::uploadThumbnailImage()
 		if(true == isActiveInterval) {
 			activeModeUploadCounter += 1;
 	        	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Active mode, Upload Count %d\n",__FILE__, __LINE__,activeModeUploadCounter);
-		}		
+		}
+#ifdef _HAS_DING_
+		if(thumbnailUpload ->m_dingNotif)
+		{
+            		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Low resolution thumbnail upload corresponding to ding is successful with header X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStamp);
+                }
+          	m_dingNotif = false;
+#endif
 	}
-
+	else
+	{
+#ifdef _HAS_DING_
+		if(thumbnailUpload ->m_dingNotif)
+                {
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Ligh resolution thumbnail upload corresponding to ding  is failed.\n",__FUNCTION__,__LINE__);
+                }
+          	m_dingNotif = false;
+#endif
+	}
 	releaseResources();
 	return ret;
 }
@@ -943,6 +1111,45 @@ void ThumbnailUpload::dynLogOnMessage(rtMessageHeader const* hdr, uint8_t const*
         }
         rtMessage_Release(req);
 }
+#ifdef _HAS_DING_
+/** @description    : Callback function to generate ding notification and smartthumbnail.
+ *  @param[in]  hdr : constant pointer rtMessageHeader
+ *  @param[in] buff : constant pointer uint8_t
+ *  @param[in]    n : uint32_t
+ *  @param[in] closure : void pointer
+ *  @return: void
+ */
+
+void ThumbnailUpload::onDingNotification(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure)
+{
+    char const*  status = NULL;
+
+    rtConnection con = (rtConnection) closure;
+    int doorbell_state =0;
+    rtMessage req;
+    rtMessage_FromBytes(&req, buff, n);
+    rtMessage_GetInt32(req, "doorbell_press", &doorbell_state);
+
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","(%s):%d doorbell_state:%d\n", __FUNCTION__, __LINE__, doorbell_state);
+
+    if(doorbell_state)
+    {
+	struct timespec currTime;
+        memset (&currTime, 0, sizeof(struct timespec));
+        clock_gettime(CLOCK_REALTIME, &currTime);
+
+        if((currTime.tv_sec - thumbnailUpload ->m_dingTime) > thumbnailUpload->m_ding->getQuiteTime())
+        {
+           thumbnailUpload ->m_dingTime = currTime.tv_sec;
+           thumbnailUpload -> m_dingNotif = true;
+           thumbnailUpload->m_ding->signalDing(true,thumbnailUpload ->m_dingTime);
+	   thumbnailUpload->setUploadStatus(true);
+
+        }
+    }
+    rtMessage_Release(req);
+}
+#endif
 
 void ThumbnailUpload::onMessage(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure)
 {
@@ -969,7 +1176,9 @@ void ThumbnailUpload::onMessage(rtMessageHeader const* hdr, uint8_t const* buff,
     rtMessage_Release(res);
   }
   rtMessage_Release(req);
-  kill(getpid(), SIGUSR1); // Sending signal to own process to wake up from the existing sleep
+//kill(getpid(), SIGUSR1); // Sending signal to own process to wake up from the existing sleep
+  thumbnailUpload->setUploadStatus(true);
+
 }
 
 
@@ -1004,13 +1213,6 @@ void *ThumbnailUpload::doTNUpload()
 
         while (!term_flag)
 	{
-		if(NULL == ThumbnailUpload::getTNUploadInstance())
-		{
-			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Failed to get thumbnail instance!\n", __FILE__, __LINE__);
-			sleep(1);
-			continue;
-		}
-
 		//Getting Upload Attribute
 		ThumbnailUpload::getTNUploadInstance()->getTNUploadAttr();
 		#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
@@ -1069,8 +1271,15 @@ void *ThumbnailUpload::doTNUpload()
 			}
 			else
 			{
+				bool isTimedOut = thumbnailUpload->waitFor(waitingInterval);
+                        	//Upon ding we need to process the motion notification immediatley
+                        	if(!isTimedOut)
+                        	{
+                                	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Ding or Active suration set!!!  need to send thumbnail immediatly \n", __FILE__, __LINE__);
+                        	}
+
 				//Sleep with passive interval
-				sleep(waitingInterval);
+				//sleep(waitingInterval);
 			}
 		}
 
@@ -1084,13 +1293,6 @@ void *ThumbnailUpload::doTNUpload()
               	#else
                 start_upload_time = sc_linear_time(NULL);
                 #endif
-
-		if(NULL == ThumbnailUpload::getTNUploadInstance())
-		{
-			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Failed to get thumbnail instance!\n", __FILE__, __LINE__);
-			sleep(1);
-			continue;
-		}
 
 
 		/* Check whether thumbnail upload is enabled */
@@ -1109,7 +1311,7 @@ void *ThumbnailUpload::doTNUpload()
                 		upload_start_time = sc_linear_time(NULL);
                 		#endif
 				
-				if (TN_UPLOAD_OK != (ThumbnailUpload::getTNUploadInstance())->uploadThumbnailImage())
+				if (TN_UPLOAD_OK != thumbnailUpload->uploadThumbnailImage())
 				{
 					RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Error Upload Thumbnail\n",__FILE__, __LINE__);
 					if (true == isActiveInterval)
@@ -1180,7 +1382,7 @@ void *ThumbnailUpload::doTNUpload()
 		else
 		{
 			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Upload is disable!\n", __FILE__, __LINE__);
-			(ThumbnailUpload::getTNUploadInstance())->releaseResources();
+			thumbnailUpload->releaseResources();
 		}
 
 		if(true == isActiveInterval)

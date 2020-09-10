@@ -32,6 +32,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <mutex>
+#include <thread>
+#include <condition_variable>
 #include "rdk_debug.h"
 #include "HttpClient.h"
 #include "RFCCommon.h"
@@ -55,6 +58,10 @@ extern "C" {
 }
 #endif
 
+
+#ifdef _HAS_DING_
+#include "DingNotification.h"
+#endif
 
 /* RtMessage */
 #include "rtLog.h"
@@ -137,10 +144,14 @@ public:
         void rtConnection_destroy();
 private:
 	void getTNUploadAttr();
+	bool m_uploadReady;
 	int  postFileToTNUploadServer(char * fileName, int fileLen, char* serverUrl, long * responseCode);
 	int  uploadThumbnailImage();
 	int  checkTNUploadfilelock(char *fname);
 	int  updateActiveUploadDuration();
+	bool waitFor(int quiteInterVal);
+        int  setUploadStatus(bool status);
+	void stringifyEventDateTime(char* strEvtDateTime , size_t evtdatetimeSize, time_t evtDateTime);
 	//Callback function for topics on thumbnail
 	static void onMessage(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	//Callback function for topics on dynamic Logging
@@ -163,6 +174,7 @@ private:
 	static char fw_name[FW_NAME_MAX_LENGTH];
 	static char ver_num[VER_NUM_MAX_LENGTH];
 	static char mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN + 1];
+	static char modelName[THUMBNAIL_UPLOAD_MAC_STRING_LEN + 1];
 	static rtConnection con;
 	static unsigned int activeModeUploadCounter;
 	char cmd[MAXSIZE];
@@ -170,6 +182,15 @@ private:
 	int m_count;
 	curl_off_t m_avgUploadSpeed;
 	std::vector<curl_off_t> m_smVector;
+	std::condition_variable m_cv;
+        std::mutex m_uploadMutex;
+#ifdef _HAS_DING_
+        DingNotification* m_ding;
+        bool m_dingNotif;
+        uint64_t m_dingTime;
+        static void onDingNotification(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+#endif
+
 };
 
 #endif
