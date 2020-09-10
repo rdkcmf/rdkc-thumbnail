@@ -37,8 +37,12 @@ CFLAGS += -DXCAM2
 endif
 ifeq ($(XCAM_MODEL), XHB1)
 CFLAGS += -DUSE_MFRLIB
+CFLAGS += -D_HAS_DING_
 CFLAGS += -DOSI
+CFLAGS  += -I../ding
+SRCS += ../ding/DingNotification.cpp
 endif
+CFLAGS  += -std=c++14 -fPIC -Wall -Wextra
 SRCS   += thumbnailUpload.cpp
 SRCS   += thumbnail_upload_main.cpp
 

@@ -57,6 +57,9 @@ extern "C" {
 #include "RdkCVideoCapturer.h"
 #include "RdkCPluginFactory.h"
 #endif
+#ifdef _HAS_DING_
+#include "DingNotification.h"
+#endif
 
 #include "RFCCommon.h"
 #include "opencv2/opencv.hpp"
@@ -87,7 +90,7 @@ extern "C" {
 #define STN_DEFAULT_HEIGHT		480
 
 #define STN_TIMESTAMP_TAG		"timestamp"
-#define STN_UPLOAD_TIME_INTERVAL	15
+#define STN_UPLOAD_TIME_INTERVAL	4
 
 #define STN_PATH 			"/tmp"
 #define STN_UPLOAD_SEND_LEN		2048
@@ -112,8 +115,10 @@ typedef enum {
 }STH_STATUS;
 
 typedef struct {
-    cv::Mat objFrame;
     uint64_t tstamp;
+#ifdef _HAS_DING_
+    uint64_t dingtstamp;
+#endif
 }STHPayload;
 
 typedef struct {
@@ -130,23 +135,25 @@ class SmartThumbnail
     public:
 	static SmartThumbnail* getInstance();
 	//Initialize the buffers and starts msg monitoring, upload thread.
-	STH_STATUS init();
+	STH_STATUS init(char* mac,bool isCVREnabled);
 	//Pushes the data to the upload queue at the end of interval.
 	STH_STATUS createPayload();
 	//Upload smart thumbnail data
-	void uploadPayload(time_t timeLeft);
+	int uploadPayload(time_t timeLeft);
+	//to update the event quiet interval
+        int getQuietInterval();
+#ifdef _HAS_DING_
+	bool waitFor(int quiteInterVal);
+#endif
 	//notify start or end of smart thumbnail process
 	STH_STATUS notify(const char* status);
 	//call Smart thumbnail destructor and deallocates dynamic allocated memory.
 	STH_STATUS destroy();
-
     private:
 	SmartThumbnail();
 	~SmartThumbnail();
 	STH_STATUS getTnUploadConf();
 	STH_STATUS getEventConf();
-	//to update the event quiet interval
-	int getQuietInterval();
 	//sets the camera firmware version.
 	int setCameraImageName(char* out);
 	//sets the camera firmware version.
@@ -155,6 +162,7 @@ class SmartThumbnail
 	int setMacAddress();
 	// registers Callback for rtmessage
 	STH_STATUS rtMsgInit();
+	void stringifyEventDateTime(char* strEvtDateTime , size_t evtdatetimeSize, time_t evtDateTime);
 	//Read the High resolution YUV frame.
 	static void onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	//Generate the RGB object detection frame.
@@ -162,7 +170,8 @@ class SmartThumbnail
 
 	//Updates object frame
 	static void  updateObjFrameData(int32_t boundingBoxXOrd,int32_t boundingBoxYOrd,int32_t boundingBoxWidth,int32_t boundingBoxHeight,uint64_t currTime);
-
+        void resetObjFrameData();
+        
 	//Resize the cropped area keeping the aspect ratio.
 	STH_STATUS resizeAspect(cv::Mat im, int w, int h, cv::Mat& im_resized);
 
@@ -179,7 +188,16 @@ class SmartThumbnail
 	static SmartThumbnail* smartThInst;
 	int g_hres_buf_id;
    	bool hres_yuvDataMemoryAllocationDone;
-
+#ifdef _HAS_DING_
+	DingNotification* m_ding;
+	std::condition_variable m_cv;
+	std::mutex m_uploadMutex;
+	bool m_dingNotif;
+	bool m_uploadReady;
+	uint64_t m_dingTime;
+	STH_STATUS setUploadStatus(bool status);
+	static void onDingNotification(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+#endif
 #ifdef _HAS_XSTREAM_
 	XStreamerConsumer* consumer;
 #ifndef _DIRECT_FRAME_READ_
@@ -210,20 +228,16 @@ class SmartThumbnail
 	int hres_y_width;
 	int hres_uv_size;
 	bool isHresFrameReady;
-
+	bool cvrEnabled;
 	HttpClient* httpClient;
 	int dnsCacheTimeout;
 	STHPayload payload;
-
-	uint64_t prev_time;
 	int32_t event_quiet_time;
-
 	char smtTnUploadURL[CONFIG_STRING_MAX];
 	char smtTnAuthCode[AUTH_TOKEN_MAX];
 	char modelName[CONFIG_STRING_MAX];
 	char macAddress[CONFIG_STRING_MAX];
 	char firmwareName[FW_NAME_MAX_LENGTH];
-
 	int sTnHeight;
 	int sTnWidth;
 	char uploadFname[256];
