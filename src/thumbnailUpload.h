@@ -41,10 +41,12 @@ extern "C" {
 #include "dev_config.h"
 #include "polling_config.h"
 #include "sysUtils.h"
-#ifndef OSI 
+
+#if !defined ( OSI ) && !defined ( THUMBNAIL_PLATFORM_RPI )
 #include "cgi_image.h"
 #include "SYS_log.h"
 #endif
+
 #ifdef USE_MFRLIB
 #include "mfrApi.h"
 #endif
