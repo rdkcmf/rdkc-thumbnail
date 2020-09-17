@@ -166,7 +166,7 @@ int ThumbnailUpload::checkTNUploadfilelock(char *fname)
                         kill(pid, SIGTERM);
                         close(fd);
                         sleep(1);
-#ifndef OSI
+#if !defined ( OSI ) && !defined ( THUMBNAIL_PLATFORM_RPI )
                         if (CheckAppsPidAlive( (char*)str , pid))
                         {
                                 kill(pid, SIGTERM);
@@ -290,6 +290,7 @@ ThumbnailUpload *ThumbnailUpload::getTNUploadInstance()
 		{
 			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera version num\n", __FILE__, __LINE__);
 		}
+#if !defined ( THUMBNAIL_PLATFORM_RPI )
 #ifdef OSI
 		memset(mac_string, 0, sizeof(mac_string));
 		char mac[CONFIG_STRING_MAX];
@@ -352,6 +353,7 @@ ThumbnailUpload *ThumbnailUpload::getTNUploadInstance()
 			strcpy(mac_string,"No MACADDR");
 		}
 #endif
+#endif
 	}
 	return thumbnailUpload;
 }
@@ -402,7 +404,7 @@ void ThumbnailUpload::setActiveInterval(void)
 	char  duration[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH];
 	char* thumbnail_upload_interval_value = NULL ;
 	char* duration_value = NULL;
-#ifdef OSI
+#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
 	currentTime = getCurrentTime(NULL); 
 #else
 	currentTime = sc_linear_time(NULL);
@@ -464,11 +466,11 @@ int ThumbnailUpload::updateActiveUploadDuration()
         int ret = RDKC_SUCCESS;
 	int uploadDuration = 0;
 	char* duration_value = NULL;
-	#ifdef OSI
+#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
 	currentTime = getCurrentTime(NULL);
-	#else
+#else
 	currentTime = sc_linear_time(NULL);
-	#endif
+#endif
 	uploadDuration = activeUploadDuration - currentTime;
 
 	duration = (char*)malloc(SIZE);
@@ -877,7 +879,10 @@ int ThumbnailUpload::uploadThumbnailImage()
         }
 #else
 
+#if !defined ( THUMBNAIL_PLATFORM_RPI )
 	snprintf(pack_head, sizeof(pack_head), "Sercomm %s %s %s %s", SC_MODEL_NAME, fw_name, mac_string, ver_num);
+#endif
+
 #endif
 	http_client->addHeader( "User-Agent", pack_head);
 
@@ -1008,7 +1013,7 @@ void *ThumbnailUpload::doTNUpload()
 
 		//Getting Upload Attribute
 		ThumbnailUpload::getTNUploadInstance()->getTNUploadAttr();
-		#ifdef OSI
+		#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
         	current_time = getCurrentTime(NULL);
 		#else
         	current_time = sc_linear_time(NULL);
@@ -1022,7 +1027,7 @@ void *ThumbnailUpload::doTNUpload()
 			{
 				if(0 != start_upload_time)
 				{
-					#ifdef OSI
+					#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI)
         				start_active_time = getCurrentTime(NULL);
 					#else
         				start_active_time = sc_linear_time(NULL);
@@ -1046,7 +1051,7 @@ void *ThumbnailUpload::doTNUpload()
 							}
 						}
 						sleep(1);
-						#ifdef OSI
+						#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
                                         	current_time = getCurrentTime(NULL);
                                         	#else
                                         	current_time = sc_linear_time(NULL);
@@ -1074,7 +1079,7 @@ void *ThumbnailUpload::doTNUpload()
 		}
 
 		//Starting Time
- 		#ifdef OSI
+ 		#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
                 start_upload_time = getCurrentTime(NULL);
               	#else
                 start_upload_time = sc_linear_time(NULL);
@@ -1098,7 +1103,7 @@ void *ThumbnailUpload::doTNUpload()
 	
 			/*Uploading the Thumbnail Image*/
 			do {
-				#ifdef OSI
+				#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
                 		upload_start_time = getCurrentTime(NULL);
                 		#else
                 		upload_start_time = sc_linear_time(NULL);
@@ -1133,7 +1138,7 @@ void *ThumbnailUpload::doTNUpload()
 					uploadRetryCount++;
 
 					// break if "total upload time" including all the retries exceeds the current "upload interval"
-					#ifdef OSI
+					#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
 					if( ((getCurrentTime(NULL) - start_upload_time) >= tn_upload_interval) || (uploadRetryCount > MAX_UPLOAD_RETRY) ) {
                                                 break;
                                         }
@@ -1145,7 +1150,7 @@ void *ThumbnailUpload::doTNUpload()
 					#endif
 
 					// calculate the time taken for the failed upload
-					#ifdef OSI
+					#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI)
 					time_for_upload = getCurrentTime(NULL) - upload_start_time;
 					#else
 					time_for_upload = sc_linear_time(NULL) - upload_start_time;
@@ -1164,7 +1169,7 @@ void *ThumbnailUpload::doTNUpload()
 					uploadRetryCount = 0;
 					break;
 				}
-			#ifdef OSI
+			#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
 			} while( (uploadRetryCount <= MAX_UPLOAD_RETRY) && ((getCurrentTime(NULL) - start_upload_time) < tn_upload_interval) );
 			#else
 			} while( (uploadRetryCount <= MAX_UPLOAD_RETRY) && ((sc_linear_time(NULL) - start_upload_time) < tn_upload_interval) );
@@ -1180,7 +1185,7 @@ void *ThumbnailUpload::doTNUpload()
 
 		if(true == isActiveInterval)
                 {
-			#ifdef OSI
+			#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
 			start_active_time = getCurrentTime(NULL);
 			#else
 			start_active_time = sc_linear_time(NULL);
