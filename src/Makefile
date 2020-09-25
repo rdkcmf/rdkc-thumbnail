@@ -27,6 +27,7 @@ USE_MFRLIB = yes
 USE_SYSUTILS = yes
 USE_CONFIGUTILS = yes
 USE_LIBSYSWRAPPER =yes
+USE_BREAKPAD = yes
 
 include ${RDK_PROJECT_ROOT_PATH}/utility/AppsRule.mak
 
@@ -42,30 +43,40 @@ CFLAGS += -DOSI
 CFLAGS  += -I../ding
 SRCS += ../ding/DingNotification.cpp
 endif
-CFLAGS  += -std=c++14 -fPIC -Wall -Wextra
+CFLAGS  += -g -std=c++14 -fPIC -Wall -Wextra
 SRCS   += thumbnailUpload.cpp
 SRCS   += thumbnail_upload_main.cpp
 
 OBJS	= $(SRCS:.cpp=.o)
 
-BIN   	= thumbnail_upload
+RELEASE_TARGET = thumbnail_upload
+DEBUG_TARGET = thumbnail_upload_debug
 
-##all: $(BIN) install
-all: $(BIN)
+##all: $(RELEASE_TARGET) install
+all: $(RELEASE_TARGET) $(DEBUG_TARGET)
 RM = rm
 INSTALL = install
 
 $(OBJS): %.o: %.cpp
 	$(CXX) -c $(CFLAGS) $< -o $@
 
-$(BIN): $(OBJS)
+$(RELEASE_TARGET): $(OBJS)
+	$(CXX) $(CFLAGS) -o $@ $(OBJS) $(LIBFLAGS)
+	$(STRIP) $(RELEASE_TARGET)
+
+$(DEBUG_TARGET): $(OBJS)
 	$(CXX) $(CFLAGS) -o $@ $(OBJS) $(LIBFLAGS)
 
 clean:
-	$(RM) -rf $(OBJS) *~ $(BIN)
+	$(RM) -rf $(OBJS) *~ $(RELEASE_TARGET) $(DEBUG_TARGET)
 
 install:
-	$(INSTALL)  -D  $(BIN) ${RDK_SDROOT}/usr/local/bin/$(BIN)
+	$(INSTALL)  -D  $(RELEASE_TARGET) ${RDK_SDROOT}/usr/local/bin/$(RELEASE_TARGET)
+ifneq ($(XCAM_MODEL), XHB1)
+	$(PLATFORM_BREAKPAD_BINARY) $(DEBUG_TARGET) > $(RELEASE_TARGET).sym
+	mv -f $(RELEASE_TARGET).sym  $(PLATFORM_SYMBOL_PATH)
+	echo "Debug symbol created for $(RELEASE_TARGET)"
+endif
 
 uninstall:
-	$(RM) -f $(RDK_SDROOT)/usr/local/bin/$(BIN)
+	$(RM) -f $(RDK_SDROOT)/usr/local/bin/$(RELEASE_TARGET)

@@ -20,6 +20,9 @@
 */
 #include <pthread.h>
 #include "thumbnailUpload.h"
+#ifdef BREAKPAD
+#include "breakpadwrap.h"
+#endif
 
 #define MAXRETRY 5
 
@@ -46,6 +49,13 @@ int main(int argc, char *argv[])
         if( NULL != thumbnail_upload) {
 		thumbnail_upload->TNURegisterSignalHandler();
 	}
+
+	/* Registering callback function for Breakpadwrap Function */
+#ifdef BREAKPAD
+	sleep(1);
+	BreakPadWrapExceptionHandler eh;
+	eh = newBreakPadWrapExceptionHandler();
+#endif
 
         int retry = 0;
         if( NULL != thumbnail_upload) {

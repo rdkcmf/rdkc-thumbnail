@@ -21,6 +21,9 @@
 */
 #include "smart_thumbnail.h"
 #include <unistd.h>
+#ifdef BREAKPAD
+#include "breakpadwrap.h"
+#endif
 
 int main(int argc, char** argv)
 {
@@ -38,6 +41,14 @@ int main(int argc, char** argv)
 
 	signal(SIGTERM, SmartThumbnail::sigHandler);
 	signal(SIGINT, SmartThumbnail::sigHandler);
+
+	/* Registering callback function for Breakpadwrap Function */
+#ifdef BREAKPAD
+	sleep(1);
+	BreakPadWrapExceptionHandler eh;
+	eh = newBreakPadWrapExceptionHandler();
+#endif
+
 	int itr =0;
 
     	while (itr < argc)

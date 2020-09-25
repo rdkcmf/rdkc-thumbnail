@@ -25,6 +25,7 @@ USE_CONFIGMGR = yes
 USE_RTMESSAGE = yes
 USE_MFRLIB = yes
 USE_LIBSYSWRAPPER = yes
+USE_BREAKPAD = yes
 
 ifeq ($(XCAM_MODEL), XHB1)
 CFLAGS  += -DXHB1
@@ -54,7 +55,7 @@ CFLAGS  += -DXCAM2
 endif
 
 CFLAGS  += -I./include
-CFLAGS  += -std=c++14 -fPIC -Wall -Wextra
+CFLAGS  += -g -std=c++14 -fPIC -Wall -Wextra
 
 CFLAGS	+= -DUSE_FILE_UPLOAD
 
@@ -77,24 +78,34 @@ CFLAGS += -DUSE_MFRLIB
 SRC += smart_thumbnail.cpp main.cpp
 OBJ = $(SRC:.cpp=.o)
 
-TARGET = smartthumbnail_cvr_lite
+RELEASE_TARGET = smartthumbnail_cvr_lite
+DEBUG_TARGET = smartthumbnail_cvr_lite_debug
 
-all: $(TARGET)
+all: $(RELEASE_TARGET) $(DEBUG_TARGET)
 
 RM = rm
 INSTALL = install
 
-$(TARGET): $(OBJ)
+$(RELEASE_TARGET): $(OBJ)
+	$(CXX) -o $(@) $^ $(LIBS)
+	$(STRIP) $(RELEASE_TARGET)
+
+$(DEBUG_TARGET): $(OBJ)
 	$(CXX) -o $(@) $^ $(LIBS)
 
 %.o:%.cpp
 	$(CXX) -c $< $(CFLAGS)  -o $@
 
 install:
-	$(INSTALL) -D $(TARGET) ${RDK_SDROOT}/usr/local/bin/$(TARGET)
+	$(INSTALL) -D $(RELEASE_TARGET) ${RDK_SDROOT}/usr/local/bin/$(RELEASE_TARGET)
+ifneq ($(XCAM_MODEL), XHB1)
+	$(PLATFORM_BREAKPAD_BINARY) $(DEBUG_TARGET) > $(RELEASE_TARGET).sym
+	mv -f $(RELEASE_TARGET).sym  $(PLATFORM_SYMBOL_PATH)
+	echo "Debug symbol created for $(RELEASE_TARGET)"
+endif
 
 uninstall:
-	$(RM) -f $(RDK_SDROOT)/usr/local/bin/$(TARGET)
+	$(RM) -f $(RDK_SDROOT)/usr/local/bin/$(RELEASE_TARGET)
 
 clean:
-	$(RM) -rf $(TARGET) $(OBJ)
+	$(RM) -rf $(RELEASE_TARGET) $(DEBUG_TARGET) $(OBJ)
