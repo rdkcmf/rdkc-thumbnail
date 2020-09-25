@@ -21,6 +21,9 @@
 */
 #include "smart_thumbnail.h"
 #include <unistd.h>
+#ifdef BREAKPAD
+#include "breakpadwrap.h"
+#endif
 
 #if 0 
 /** @description: Checks if the feature is enabled via RFC
@@ -73,6 +76,13 @@ int main(int argc, char** argv)
 	memset(&currTime, 0, sizeof(currTime));
 	memset(&prevTime, 0, sizeof(prevTime));
 	int itr =0;
+
+	/* Registering callback function for Breakpadwrap Function */
+#ifdef BREAKPAD
+	sleep(1);
+	BreakPadWrapExceptionHandler eh;
+	eh = newBreakPadWrapExceptionHandler();
+#endif
 
     	while (itr < argc)
     	{
