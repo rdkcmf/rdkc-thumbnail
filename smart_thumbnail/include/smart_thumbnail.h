@@ -70,10 +70,12 @@ extern "C" {
 #define YUV_HRES_FRAME_WIDTH		1280
 #define YUV_HRES_FRAME_HEIGHT		720
 
-#ifndef XCAM2
-#define STN_HRES_BUFFER_ID		0
+#ifdef XCAM2
+#define STN_HRES_BUFFER_ID              2
+#elif XHB1
+#define STN_HRES_BUFFER_ID              2
 #else
-#define STN_HRES_BUFFER_ID		2
+#define STN_HRES_BUFFER_ID              0
 #endif
 
 //actual width and height of smart thumbnail to be uploaded
@@ -191,6 +193,7 @@ class SmartThumbnail
 	cv::Size getCropSize(cv::Rect boundRect,double w,double h);
 	cv::Rect getRelativeBoundingBox(cv::Rect boundRect, cv::Size cropSize, cv::Point2f allignedCenter);
 	void stringifyEventDateTime(char* strEvtDateTime , size_t evtdatetimeSize, time_t evtDateTime);
+	void resetObjFrameData();
 	//Updates object frame
 	void  updateObjFrameData(int32_t boundingBoxXOrd,int32_t boundingBoxYOrd,int32_t boundingBoxWidth,int32_t boundingBoxHeight,uint64_t currTime);
 	int retryAtExpRate();

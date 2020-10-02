@@ -376,7 +376,7 @@ STH_STATUS SmartThumbnail::saveSTN()
 	    unionBox.height = ofData.boundingBoxHeight;
 
 	    // extracted the below logic from server scala code
-            RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):unionBox.x %d unionBox.y %d unionBox.height %d unionBox.width %d\n", __FILE__, __LINE__, unionBox.x, unionBox.y, unionBox.height, unionBox.width);
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):unionBox.x %d unionBox.y %d unionBox.height %d unionBox.width %d hres_y_width=%d ,hres_y_height=%d\n", __FILE__, __LINE__, unionBox.x, unionBox.y, unionBox.height, unionBox.width,hres_y_width,hres_y_height);
 	    cv::Point2f orgCenter = getActualCentroid(unionBox);
 	    cv::Size cropSize = getCropSize(unionBox, sTnWidth, sTnHeight);
 	    cv::Point2f allignedCenter =  alignCentroid(orgCenter, lHresRGBMat, cropSize);
@@ -1267,7 +1267,19 @@ STH_STATUS SmartThumbnail::resizeAspect(cv::Mat im, int w, int h, cv::Mat& im_re
     return STH_SUCCESS;
 }
 #endif
-
+void SmartThumbnail::resetObjFrameData()
+{
+    smartThInst -> ofData.boundingBoxXOrd = 0;
+    smartThInst -> ofData.boundingBoxYOrd = 0;
+    smartThInst -> ofData.boundingBoxWidth = 0;
+    smartThInst -> ofData.boundingBoxHeight = 0;
+    smartThInst -> ofData.currTime = 0;
+    if(!smartThInst -> ofData.maxBboxObjYUVFrame.empty())
+    {
+        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Releasing maxBboxObjYUVFrame\n", __FILE__, __LINE__);
+        smartThInst -> ofData.maxBboxObjYUVFrame.release();
+    }
+}
 /** @description   : resizes smart thumbnail to default height & width
  *  @param[in]     : x ordinate of bounding box
  *  @param[in]     : y ordinate of bounding box
@@ -1278,6 +1290,7 @@ STH_STATUS SmartThumbnail::resizeAspect(cv::Mat im, int w, int h, cv::Mat& im_re
 void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t boundingBoxYOrd,int32_t boundingBoxWidth,int32_t boundingBoxHeight,			      						uint64_t currTime)
 {
     unsigned char*  hres_yuvData = NULL;
+    resetObjFrameData();
 #if 0
     char tmpFname[256] = {'\0'};
     cv::Mat lHresRGBMat;
