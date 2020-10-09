@@ -47,18 +47,20 @@ export RDK_DIR=$BUILDS_DIR
 export ENABLE_RDKC_LOGGER_SUPPORT=true
 export DCA_PATH=$RDK_SOURCE_PATH
 
-echo "Disable xStreamer by default"
-export ENABLE_XSTREAMER=false
+if [ "$XCAM_MODEL" == "SCHC2" ] || [ "$XCAM_MODEL" == "XHB1" ]; then
+    echo "Enable xStreamer by default for xCam2 and DBC"
+    export ENABLE_XSTREAMER=true
+else
+    echo "Disable xStreamer by default for xCam and iCam2"
+    export ENABLE_XSTREAMER=false
+fi
 
 if [ "$XCAM_MODEL" == "SCHC2" ]; then
 . ${RDK_PROJECT_ROOT_PATH}/build/components/amba/sdk/setenv2
 else
 . ${RDK_PROJECT_ROOT_PATH}/build/components/sdk/setenv2
 fi
-if [ "$XCAM_MODEL" == "XHB1" ];then
-echo "setxStreamer - Enable xStreamer"
-export ENABLE_XSTREAMER=true
-fi	
+
 export PLATFORM_SDK=${RDK_TOOLCHAIN_PATH}
 export FSROOT=$RDK_FSROOT_PATH
 
@@ -134,20 +136,19 @@ function install()
     echo "thumbnail Installation is done"
 }
 
-# This function sets the XSTREAMER flag
-function setxStreamer()
+# This function disables XSTREAMER flag for Hydra
+function setHydra()
 {
-    echo "setxStreamer - Enable xStreamer"
-    export ENABLE_XSTREAMER=true
+    echo "setHydra - Disable xStreamer"
+    export ENABLE_XSTREAMER=false
 }
-
 # run the logic
 #these args are what left untouched after parse_args
 HIT=false
 
 for i in "$@"; do
     case $i in
-        enablexStreamer)  HIT=true; setxStreamer ;;
+        enableHydra)  HIT=true; setHydra ;;
         configure)  HIT=true; configure ;;
         clean)      HIT=true; clean ;;
         build)      HIT=true; build ;;
