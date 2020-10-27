@@ -226,6 +226,9 @@ class SmartThumbnail
 	RDKC_PLUGIN_YUVInfo* hres_frame_info;
 #endif
 
+        bool logMotionEvent;
+        bool logROIMotionEvent;
+
 	std::thread rtMessageReceive;
 	std::thread uploadThread;
 	bool rtmessageSTHThreadExit;

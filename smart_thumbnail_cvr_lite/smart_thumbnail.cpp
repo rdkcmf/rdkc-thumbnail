@@ -95,7 +95,9 @@ SmartThumbnail::SmartThumbnail():dnsCacheTimeout(STN_DEFAULT_DNS_CACHE_TIMEOUT),
 				cvrEnabled(false),
                                 prev_time(0),
 				maxBboxArea(0),
-				event_quiet_time(STN_DEFAULT_EVT_QUIET_TIME)
+				event_quiet_time(STN_DEFAULT_EVT_QUIET_TIME),
+                                logMotionEvent(true),
+                                logROIMotionEvent(true)
 {
     memset(uploadFname, 0, sizeof(uploadFname));
     memset(smtTnUploadURL, 0, sizeof(smtTnUploadURL));
@@ -458,6 +460,10 @@ STH_STATUS SmartThumbnail::createPayload()
             //Write smart thumbnail to file.
             imwrite(uploadFname,croppedObj);
 #endif
+
+            smartThInst->logMotionEvent = true;
+            smartThInst->logROIMotionEvent = true;
+
 	    //reset payload flag
 	    smartThInst -> isPayloadAvailable = false;
 	    smartThInst -> maxBboxArea = 0;
@@ -906,6 +912,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
     cv::Mat cropped_object;
     cv::Mat resized_cropped_object;
     int lBboxArea = 0;
+    int isInsideROI = 0;
 
     (void) closure;
 
@@ -916,6 +923,9 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 
     //read the metadata.
     SmarttnMetadata_thumb::from_rtMessage(&sm, m);
+    rtMessage_GetInt32(m, "isMotionInsideROI", &isInsideROI);
+
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): insideROI:%d\n", __FILE__, __LINE__,isInsideROI);
 
     std::istringstream iss(sm.strFramePTS);
     iss >> lResFramePTS;
@@ -931,11 +941,28 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Current Area : %d\n", __FILE__ , __LINE__, lBboxArea);
 
+    //Log first motion outside ROI
+    if( (smartThInst->logMotionEvent == true) &&
+        (sm.event_type == 4) && (isInsideROI == 0) ) {
+
+        smartThInst->logMotionEvent = false;
+        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Received Motion event OUTSIDE ROI from xvision during the current cvr interval,  time received: %llu\n", __FILE__ , __LINE__, curr_time);
+    }
+
+    //Log first motion inside ROI
+    if( (smartThInst->logROIMotionEvent == true) &&
+        (sm.event_type == 4) && (isInsideROI == 1) ) {
+
+        smartThInst->logROIMotionEvent = false;
+        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Received ROI MOTION from xvision during the current cvr interval,  time received: %llu\n", __FILE__ , __LINE__, curr_time);
+    }
+
     // if motion is detected update the metadata.
     if ((smartThInst -> isHresFrameReady) &&
        //(motionScore != 0.0) &&
        (sm.event_type == 4) &&
-       (lBboxArea > smartThInst -> maxBboxArea)) {
+       (lBboxArea > smartThInst->maxBboxArea) &&
+       (isInsideROI ==1)) {
 
     	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Processing metadata .\n", __FUNCTION__ , __LINE__);
 
@@ -1025,7 +1052,7 @@ void SmartThumbnail::resetObjFrameData()
     smartThInst -> ofData.currTime = 0;
     if(!smartThInst -> ofData.maxBboxObjYUVFrame.empty())
     {
-	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Releasing maxBboxObjYUVFrame\n", __FILE__, __LINE__);                        
+//	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Releasing maxBboxObjYUVFrame\n", __FILE__, __LINE__);                        
 	smartThInst -> ofData.maxBboxObjYUVFrame.release();
     } 
 }

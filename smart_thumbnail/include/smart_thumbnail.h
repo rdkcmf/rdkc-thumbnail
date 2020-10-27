@@ -257,6 +257,8 @@ class SmartThumbnail
 	static void onDingNotification(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 #endif
 	bool logMotionEvent;
+	bool logROIMotionEvent;
+        char motionLog[CONFIG_STRING_MAX];
 
 	bool uploadReady;
 	//static bool rtmessageSTHThreadExit;
@@ -303,6 +305,7 @@ class SmartThumbnail
 	cv::Rect smartThumbCoord;
         BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
         time_t stnUploadTime;
+        time_t eventquietTimeStart;
 };
 
 struct SmarttnMetadata_thumb
