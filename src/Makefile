@@ -28,6 +28,7 @@ USE_SYSUTILS = yes
 USE_CONFIGUTILS = yes
 USE_LIBSYSWRAPPER =yes
 USE_BREAKPAD = yes
+USE_MISC = yes
 
 include ${RDK_PROJECT_ROOT_PATH}/utility/AppsRule.mak
 

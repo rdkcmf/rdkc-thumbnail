@@ -109,7 +109,38 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Failed to open the URL\n", __FILE__, __LINE__);
 	}
 	memset(cmd,0,MAXSIZE);
+
+#ifdef OSI
+        int tn_width = TN_OP_WIDTH;
+        int tn_height = TN_OP_HEIGHT;
+        FileUtils m_settings;
+        std::string aspect_ratio = "16:9";
+
+        if(!m_settings.loadFromFile(std::string(ASPECTRATIO_FILE)))
+        {
+                RDK_LOG(RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Loading aspect ratio file failed, setting aspect ratio to default 16:9\n", __FILE__, __LINE__);
+        }
+        else
+        {
+                m_settings.get("aspectRatio", aspect_ratio);
+                if(aspect_ratio.compare("4:3") == 0)
+                {
+                        tn_width = TN_OP_WIDTH_4_3;
+                        tn_height = TN_OP_HEIGHT_4_3;
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Current aspect ratio is 4:3\n", __FILE__, __LINE__);
+                }
+		else //default aspect ratio 16:9
+		{
+                	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Current aspect ratio is 16:9\n", __FILE__, __LINE__);
+		}
+        }
+
+        snprintf(cmd,sizeof(cmd)-1, "rdkc_snapshooter %s %d %d %d", SNAPSHOT_FILE, COMPRESSION_SCALE, tn_width, tn_height);
+        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Thumbnail size (width*height) : %d*%d\n", __FILE__, __LINE__, tn_width, tn_height);
+#else
 	snprintf(cmd,sizeof(cmd)-1, "rdkc_snapshooter %s %d %d %d", SNAPSHOT_FILE, COMPRESSION_SCALE, TN_OP_WIDTH, TN_OP_HEIGHT);
+	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Thumbnail size (width*height) : %d*%d\n", __FILE__, __LINE__, TN_OP_WIDTH, TN_OP_HEIGHT);
+#endif
 
 	liveCacheConf = (livecache_provision_info_t*) malloc(sizeof(livecache_provision_info_t));
 	int ret = getCameraImageName(fw_name);
