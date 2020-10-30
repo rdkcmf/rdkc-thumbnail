@@ -35,6 +35,8 @@
 #include <mutex>
 #include <thread>
 #include <condition_variable>
+#include <fileUtils.h>
+#include <string>
 #include "rdk_debug.h"
 #include "HttpClient.h"
 #include "RFCCommon.h"
@@ -104,6 +106,10 @@ extern "C" {
 #define MAX_UPLOAD_RETRY         			2
 #define MAX_RETRY_SLEEP					10
 #define MAXSIZE						100
+
+#define ASPECTRATIO_FILE                                "/opt/usr_config/aspect_ratio.conf"
+#define TN_OP_WIDTH_4_3                                 640
+#define TN_OP_HEIGHT_4_3                                480
 
 #define RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC			"RDKC.ENABLE_DYNAMIC_LOG"
 #define RTMSG_THUMBNAIL_TOPIC				"RDKC.THUMBNAIL"
