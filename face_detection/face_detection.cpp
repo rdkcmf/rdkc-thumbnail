@@ -30,6 +30,7 @@ using namespace cv;
 
 int main( int argc, const char** argv );
 void detectAndDraw( Mat& img, CascadeClassifier& cascade );
+static char *current_time(  );
 
 /* {{{ main() */
 int main( int argc, const char** argv )
@@ -70,15 +71,50 @@ int main( int argc, const char** argv )
 void detectAndDraw( Mat& img, CascadeClassifier& cascade )
 {
     vector<Rect> faces;
+    char *sys_time = NULL;
+    char filename[50];
 
     cascade.detectMultiScale( img, faces, 1.1,
                              2, 0|CASCADE_SCALE_IMAGE, Size(30, 30) );
 
     if( faces.size() >= 1 )
     {
+        sys_time = current_time(  );
+
+        if( NULL != sys_time)
+        {
+            sprintf( filename, "/var/www/pages/image/thumbnail%s.jpeg", sys_time );
+
+            imwrite(filename, img);
+
+            free( sys_time );
+            sys_time = NULL;
+        }
+
         printf("\n Face Detected From Live Camera Buffer...");
     }
     
 }
 /* }}} */
 
+/* {{{ current_time() */
+static char *current_time(  )
+{
+    time_t time_now;
+    struct tm *timeinfo;
+    char *tm_buffer = ( char * ) malloc( sizeof( char ) * 21 );
+
+    if ( NULL == tm_buffer )
+    {
+        printf( "\n %s(%d): Failed to allocate memory for tm_buffer\n",
+                 __FILE__, __LINE__ );
+    }
+
+    time( &time_now );
+    timeinfo = localtime( &time_now );
+
+    strftime( tm_buffer, 21, "%F:%T.", timeinfo );  //Setting format of time
+
+    return tm_buffer;
+}
+/* }}} */
