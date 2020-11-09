@@ -24,6 +24,10 @@
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 #include <iostream>
+#include <time.h>
+
+#define TRUE  1 
+#define FALSE 0 
 
 using namespace std;
 using namespace cv;
@@ -31,6 +35,8 @@ using namespace cv;
 int main( int argc, const char** argv );
 void detectAndDraw( Mat& img, CascadeClassifier& cascade );
 static char *current_time(  );
+
+int facedetected = 0;
 
 /* {{{ main() */
 int main( int argc, const char** argv )
@@ -46,6 +52,8 @@ int main( int argc, const char** argv )
 
     if( capture.isOpened() )
     {
+	int count = 0;
+
         printf(" \n Face Detection Started....");
         
         while(1)
@@ -56,8 +64,14 @@ int main( int argc, const char** argv )
                 break;
 
             Mat frame1 = frame.clone();
+	    
+            ++count;
 
-            detectAndDraw( frame1, cascade );
+	    if( count/20 )
+	    {
+	        count = 0;
+                detectAndDraw( frame1, cascade );
+            }
         }
     }
     else
@@ -72,26 +86,53 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade )
 {
     vector<Rect> faces;
     char *sys_time = NULL;
-    char filename[50];
+    char filename[50],filenamewithpath[100];
+    Mat gray, smallImg;
 
-    cascade.detectMultiScale( img, faces, 1.1,
+   char a[500] = "curl -d \"{ \"jsonrpc\":\"2.0\", \"id\":4, \"method\":\"CameraMotionMonitor.1.sendPath\", \"params\":{\"ipaddress\":\"192.168.xx.yy\", \"imagepath\":\"image/path\", \"filename\":\"%s\"} }\" http://192.168.43.48:9998/jsonrpc";
+
+    char curl[500] = { 0 };
+
+    cvtColor( img, gray, COLOR_BGR2GRAY );
+
+    double fx = 1;
+
+    resize( gray, smallImg, Size(), fx, fx, INTER_LINEAR );
+
+    equalizeHist( smallImg, smallImg );
+
+    cascade.detectMultiScale( smallImg, faces, 1.1,
                              2, 0|CASCADE_SCALE_IMAGE, Size(30, 30) );
 
     if( faces.size() >= 1 )
     {
         sys_time = current_time(  );
 
-        if( NULL != sys_time)
+        if( ( NULL != sys_time ) && ( FALSE == facedetected) )
         {
-            sprintf( filename, "/var/www/pages/image/thumbnail%s.jpeg", sys_time );
+            sprintf( filenamewithpath, "/var/www/pages/thumbnail%s.jpeg", sys_time );
 
-            imwrite(filename, img);
+	    sprintf( filename, "thumbnail%s.jpeg", sys_time );
+
+            imwrite(filenamewithpath, img);
+
+	    sprintf(curl,a,filename);
+
+	    system(curl);
+
+	    facedetected = TRUE;
 
             free( sys_time );
+
             sys_time = NULL;
+
+	    printf("\n Face Detected From Live Camera Buffer...");
         }
 
-        printf("\n Face Detected From Live Camera Buffer...");
+    }
+    else
+    {
+	facedetected = FALSE;
     }
     
 }
@@ -113,7 +154,7 @@ static char *current_time(  )
     time( &time_now );
     timeinfo = localtime( &time_now );
 
-    strftime( tm_buffer, 21, "%F:%T.", timeinfo );  //Setting format of time
+    strftime( tm_buffer, 21, "%F:%T", timeinfo );  //Setting format of time
 
     return tm_buffer;
 }
