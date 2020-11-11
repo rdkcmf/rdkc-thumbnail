@@ -25,9 +25,12 @@
 #include "opencv2/imgproc.hpp"
 #include <iostream>
 #include <time.h>
+#include "string.h"
 
 #define TRUE  1 
 #define FALSE 0 
+
+#define MAX_LINE_LENGTH 120
 
 using namespace std;
 using namespace cv;
@@ -35,6 +38,9 @@ using namespace cv;
 int main( int argc, const char** argv );
 void detectAndDraw( Mat& img, CascadeClassifier& cascade );
 static char *current_time(  );
+int getvaluefromconf(char* fetchvalue, char *returnval);
+
+char videoip[20]={0},cameraip[20]={0};
 
 int facedetected = 0;
 
@@ -45,6 +51,10 @@ int main( int argc, const char** argv )
     Mat frame;
 
     CascadeClassifier cascade;
+
+    getvaluefromconf("VIDEO_IP=",videoip);
+
+    getvaluefromconf("CAMERA_IP=",cameraip);
 
     cascade.load( "/lib/rdk/haarcascade_frontalface_alt.xml" ) ;
 
@@ -89,7 +99,7 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade )
     char filename[50],filenamewithpath[100];
     Mat gray, smallImg;
 
-   char a[500] = "curl -d \"{ \"jsonrpc\":\"2.0\", \"id\":4, \"method\":\"CameraMotionMonitor.1.sendPath\", \"params\":{\"ipaddress\":\"192.168.xx.yy\", \"imagepath\":\"image/path\", \"filename\":\"%s\"} }\" http://192.168.43.48:9998/jsonrpc";
+    char a[500] = "curl -d \"{\"jsonrpc\":\"2.0\", \"id\":4, \"method\":\"CameraMotionMonitor.1.sendPath\", \"params\":{\"ipaddress\":\"%s\", \"streampath\":\"\", \"streamname\":\"stream2\",\"imagepath\":\"/var/www/pages\", \"filename\":\"%s\", \"portno\":\"5544\"} }\" http://%s:9998/jsonrpc";
 
     char curl[500] = { 0 };
 
@@ -116,7 +126,7 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade )
 
             imwrite(filenamewithpath, img);
 
-	    sprintf(curl,a,filename);
+	    sprintf(curl,a,cameraip,filename,videoip);
 
 	    system(curl);
 
@@ -157,5 +167,51 @@ static char *current_time(  )
     strftime( tm_buffer, 21, "%F:%T", timeinfo );  //Setting format of time
 
     return tm_buffer;
+}
+/* }}} */
+
+/* {{{ getvaluefromconf() */
+int getvaluefromconf(char* fetchvalue, char* returnval)
+{
+        size_t max_line_length = MAX_LINE_LENGTH;
+        char *file_buffer;
+        char *locate_1 = NULL;
+        FILE* fp;
+
+        fp = fopen("/usr/local/thumb/thumb.conf","r");
+
+        if(fp == NULL)
+        {
+                printf("\n Failed to open thumbnail config file");
+                return FALSE;
+        }
+
+        file_buffer = (char*)malloc(MAX_LINE_LENGTH+1);
+
+        if(file_buffer == NULL)
+        {
+                printf("\n malloc failed");
+                fclose(fp);
+                return FALSE;
+        }
+
+        while(getline(&file_buffer,&max_line_length,fp) != -1)
+        {
+                locate_1 = strstr(file_buffer,fetchvalue);
+                if(locate_1)
+                {
+                        locate_1 += strlen(fetchvalue);
+
+                        /* copy the contents till linefeed */
+                        while(*locate_1 != '\n')
+                                *returnval++ = *locate_1++;
+                        free(file_buffer);
+                        fclose(fp);
+                        return TRUE;
+                }
+        }
+        free(file_buffer);
+        fclose(fp);
+        return TRUE;
 }
 /* }}} */
