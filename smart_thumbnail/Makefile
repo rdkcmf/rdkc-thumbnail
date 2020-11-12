@@ -36,6 +36,11 @@ USE_DEWARP = yes
 else
 SUPPORT_MXML = yes
 endif
+
+ifeq ($(XCAM_MODEL), SCHC2)
+USE_DEWARP = yes
+endif
+
 ENABLE_DIRECT_FRAME_READ := true
 
 ifneq ($(ENABLE_XSTREAMER), true)
