@@ -113,6 +113,11 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 #ifdef OSI
         int tn_width = TN_OP_WIDTH;
         int tn_height = TN_OP_HEIGHT;
+#ifdef _HAS_DING_
+	tn_width = TN_OP_WIDTH_4_3;
+        tn_height = TN_OP_HEIGHT_4_3;
+#endif
+#if 0
         FileUtils m_settings;
         std::string aspect_ratio = "16:9";
 
@@ -134,7 +139,7 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
                 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Current aspect ratio is 16:9\n", __FILE__, __LINE__);
 		}
         }
-
+#endif
         snprintf(cmd,sizeof(cmd)-1, "rdkc_snapshooter %s %d %d %d", SNAPSHOT_FILE, COMPRESSION_SCALE, tn_width, tn_height);
         RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Thumbnail size (width*height) : %d*%d\n", __FILE__, __LINE__, tn_width, tn_height);
 #else
