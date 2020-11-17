@@ -22,9 +22,9 @@
 USE_HTTPCLIENT = yes
 USE_RFCCONFIG = yes
 USE_RTMESSAGE = yes
+USE_DATAPROVIDER = no
 USE_MFRLIB = yes
 USE_CONFIGMGR = yes
-USE_LIBSYSWRAPPER = yes
 USE_BREAKPAD = yes
 
 ifeq ($(XCAM_MODEL), XHB1)
@@ -44,7 +44,6 @@ else
 USE_CONSUMER = yes
 endif
 
-USE_CONFIGUTILS = yes
 include ${RDK_PROJECT_ROOT_PATH}/utility/AppsRule.mak
 LIBS = $(LIBFLAGS)
 
