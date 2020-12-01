@@ -35,8 +35,10 @@
 #include <mutex>
 #include <thread>
 #include <condition_variable>
+#ifdef OSI
 #include <fileUtils.h>
 #include <string>
+#endif
 #include "rdk_debug.h"
 #include "HttpClient.h"
 #include "RFCCommon.h"
