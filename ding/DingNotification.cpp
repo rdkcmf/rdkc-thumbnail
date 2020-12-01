@@ -89,7 +89,7 @@ DingNotification *DingNotification::getInstance()
 }
 
 
-void DingNotification::init(char* mac,char* modelName,char* firmware)
+void DingNotification::init(char* modelName,char* mac,char* firmware)
 {
    snprintf(m_macAddress, sizeof(m_macAddress), "%s",mac);	
    snprintf(m_modelName, sizeof(m_modelName), "%s",modelName);	
