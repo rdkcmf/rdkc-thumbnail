@@ -73,11 +73,9 @@ clean:
 
 install:
 	$(INSTALL)  -D  $(RELEASE_TARGET) ${RDK_SDROOT}/usr/local/bin/$(RELEASE_TARGET)
-ifneq ($(XCAM_MODEL), XHB1)
 	$(PLATFORM_BREAKPAD_BINARY) $(DEBUG_TARGET) > $(RELEASE_TARGET).sym
 	mv -f $(RELEASE_TARGET).sym  $(PLATFORM_SYMBOL_PATH)
 	echo "Debug symbol created for $(RELEASE_TARGET)"
-endif
 
 uninstall:
 	$(RM) -f $(RDK_SDROOT)/usr/local/bin/$(RELEASE_TARGET)
