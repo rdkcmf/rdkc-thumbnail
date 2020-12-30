@@ -1218,7 +1218,7 @@ void* ThumbnailUpload::rtMessage_Receive(void* arg)
   {
     rtError err = rtConnection_Dispatch(con);
     if (err != RT_OK)
-      RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Dispatch Error: %s", __FILE__, __LINE__, rtStrError(err));
+      RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Dispatch Error: %s", __FILE__, __LINE__, rtStrError(err));
   }
 }
 
