@@ -1693,8 +1693,8 @@ STH_STATUS SmartThumbnail::receiveRtmessage()
 	err = rtConnection_Dispatch(connectionRecv);
 	if (err != RT_OK) {
 	    //rtLog_Debug("dispatch:%s", rtStrError(err));
-	    RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): dispatch:%s\n",__FUNCTION__,__LINE__,rtStrError(err));
-	    RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error receiving msg via rtmessage\n",__FUNCTION__,__LINE__);
+	    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): dispatch:%s\n",__FUNCTION__,__LINE__,rtStrError(err));
+	    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error receiving msg via rtmessage\n",__FUNCTION__,__LINE__);
 	}
 	usleep(10000);
     }
