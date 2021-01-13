@@ -1168,9 +1168,15 @@ void SmartThumbnail::onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const
  */
 void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure)
 {
-    SmarttnMetadata_thumb sm;
-
+    double   motionScore = 0.0;
+    int32_t  eventType = 0;
+    int32_t  boundingBoxXOrd = 0;
+    int32_t  boundingBoxYOrd = 0;
+    int32_t  boundingBoxHeight = 0;
+    int32_t  boundingBoxWidth = 0;
     uint64_t curr_time = 0;
+    char const*  s_curr_time = NULL;
+    char const*  strFramePTS = NULL;
     uint64_t lResFramePTS = 0;
 
     int lBboxArea = 0;
@@ -1194,24 +1200,40 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) process frame invoked.\n", __FUNCTION__ , __LINE__);
 
     //read the metadata.
-    SmarttnMetadata_thumb::from_rtMessage(&sm, m);
+    rtMessage_GetString(m, "timestamp", &strFramePTS);
+    rtMessage_GetInt32(m, "event_type", &eventType);
+    rtMessage_GetDouble(m, "motionScore", &motionScore);
+    rtMessage_GetInt32(m, "boundingBoxXOrd", &boundingBoxXOrd);
+    rtMessage_GetInt32(m, "boundingBoxYOrd", &boundingBoxYOrd);
+    rtMessage_GetInt32(m, "boundingBoxHeight", &boundingBoxHeight);
+    rtMessage_GetInt32(m, "boundingBoxWidth", &boundingBoxWidth);
+    rtMessage_GetString(m, "currentTime", &s_curr_time);
 
-    std::istringstream iss(sm.strFramePTS);
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): strFramePTS:%s \n", __FUNCTION__ , __LINE__, strFramePTS);
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): event Type: %d\n",__FILE__, __LINE__, eventType);
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): motionScore: %f\n",__FILE__, __LINE__, motionScore);
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): boundingBoxXOrd:%d\n", __FILE__, __LINE__,boundingBoxXOrd);
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): boundingBoxYOrd:%d\n", __FILE__, __LINE__,boundingBoxYOrd);
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): boundingBoxHeight:%d\n", __FILE__, __LINE__,boundingBoxHeight);
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): boundingBoxWidth:%d\n", __FILE__, __LINE__,boundingBoxWidth);
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): curr timestamp:%s\n", __FILE__, __LINE__,s_curr_time);
+
+    std::istringstream iss(strFramePTS);
     iss >> lResFramePTS;
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): lResframePTS:%llu\n", __FUNCTION__, __LINE__, lResFramePTS);
     iss.clear();
 
-    iss.str(sm.s_curr_time);
+    iss.str(s_curr_time);
     iss >> curr_time;
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): curr timestamp (uint64):%llu\n", __FILE__, __LINE__,curr_time);
     iss.clear();
 
-    lBboxArea = sm.unionBox.boundingBoxWidth * sm.unionBox.boundingBoxHeight;
+    lBboxArea = boundingBoxWidth * boundingBoxHeight;
 
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Current Area : %d\n", __FILE__ , __LINE__, lBboxArea);
 
     if( (smartThInst->logMotionEvent == true)
-	&& (sm.event_type == 4) ) {
+	&& (eventType == 4) ) {
 
 	smartThInst->logMotionEvent = false;
 	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Received Motion event from xvision during the current cvr interval,  time received: %llu\n", __FILE__ , __LINE__, curr_time);
@@ -1220,7 +1242,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
     // if motion is detected update the metadata.
     if ((smartThInst->isHresFrameReady) &&
        //(motionScore != 0.0) &&
-       (sm.event_type == 4) &&
+       (eventType == 4) &&
        (lBboxArea > smartThInst->maxBboxArea)) {
 
     	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Processing metadata .\n", __FUNCTION__ , __LINE__);
@@ -1236,15 +1258,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 		//To indicate payload will there to upload
 	        smartThInst -> isPayloadAvailable = true;
 	    }
-            smartThInst -> updateObjFrameData(sm.unionBox.boundingBoxXOrd, sm.unionBox.boundingBoxYOrd, sm.unionBox.boundingBoxWidth, sm.unionBox.boundingBoxHeight, curr_time);
-            memset(smartThInst->objectBoxs, INVALID_BBOX_ORD, sizeof(smartThInst->objectBoxs));
-            for(int32_t i=0; i<MAX_BLOB_SIZE; i++) {
-
-                if(sm.objectBoxs[i].boundingBoxXOrd == INVALID_BBOX_ORD) {
-                    break;
-                }
-                smartThInst -> updateObjectBoxs(&(sm.objectBoxs[i]), i);
-            }
+            smartThInst -> updateObjFrameData(boundingBoxXOrd, boundingBoxYOrd, boundingBoxWidth, boundingBoxHeight, curr_time);
 	    //lock.unlock();
 	//}
 
@@ -1467,7 +1481,6 @@ void SmartThumbnail::uploadPayload()
 {
     int curlCode = 0;
     long response_code = 0;
-    char objectBoxsBuf[BLOB_BB_MAX_LEN] = {0};
 #ifdef USE_FILE_UPLOAD
     char *data  = NULL;
     struct stat fileStat;
@@ -1610,23 +1623,6 @@ void SmartThumbnail::uploadPayload()
             //SMTN's Bounding box of Motion Detection area
             snprintf(packHead, sizeof(packHead), "%d, %d, %d, %d", relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height);
             smartThInst->httpClient->addHeader( "X-BoundingBox", packHead);
-
-            memset(packHead, 0, sizeof(packHead));
-            //SMTN's objectBoxs of Motion Detction area
-            for(int32_t i =0; i< UPPER_LIMIT_BLOB_BB; i++)
-            {
-                if((smartThInst->objectBoxs[i].boundingBoxXOrd) == INVALID_BBOX_ORD)
-                    break;
-                memset(objectBoxsBuf, 0 , sizeof(objectBoxsBuf));
-                snprintf(objectBoxsBuf, sizeof(objectBoxsBuf), "(%d, %d, %d, %d)," , smartThInst ->objectBoxs[i].boundingBoxXOrd, smartThInst ->objectBoxs[i].boundingBoxYOrd , smartThInst ->objectBoxs[i].boundingBoxWidth, smartThInst ->objectBoxs[i].boundingBoxHeight );
-                strcat(packHead, objectBoxsBuf);
-            }
-            if(packHead[strlen(packHead) -1] == ',') {
-                packHead[strlen(packHead)-1] = '\0';
-            }
-            memset(objectBoxsBuf, 0 , sizeof(objectBoxsBuf));
-            strcpy(objectBoxsBuf, packHead);
-            smartThInst->httpClient->addHeader("X-BoundingBoxes", packHead);
             memset(packHead, 0, sizeof(packHead));
             snprintf(packHead, sizeof(packHead), "CVR");
             smartThInst->httpClient->addHeader("X-VIDEO-RECORDING", packHead);
@@ -1664,7 +1660,7 @@ void SmartThumbnail::uploadPayload()
 
         //log success/failure for telemetry
         if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-EVENT-TIME: %s X-BoundingBox: %d %d %d %d X-VIDEO-RECORDING:CVR X-BoundingBoxes: %s\n",__FUNCTION__,__LINE__,sTnTStamp, relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height,objectBoxsBuf);
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-EVENT-TIME: %s X-BoundingBox: %d %d %d %d X-VIDEO-RECORDING:CVR\n",__FUNCTION__,__LINE__,sTnTStamp, relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height);
         }else {
             RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail upload failed with response code %lu and curl code %d\n",__FUNCTION__,__LINE__, response_code, curlCode);
         }
@@ -1875,88 +1871,3 @@ int SmartThumbnail::setMacAddress(char* macAddress)
 	}
 #endif
 }
-
-
-/** @description   : update ObjectBoxs data for smart thumbnail upload
- *  @param[in]     : objectBox
- *  @param[in]     : index
- *  @return        : void
- */
-void SmartThumbnail::updateObjectBoxs(BoundingBox *objectBox, int32_t index)
-{
-    smartThInst -> objectBoxs[index].boundingBoxXOrd = objectBox->boundingBoxXOrd;
-    smartThInst -> objectBoxs[index].boundingBoxYOrd = objectBox->boundingBoxYOrd;
-    smartThInst -> objectBoxs[index].boundingBoxWidth = objectBox->boundingBoxWidth;
-    smartThInst -> objectBoxs[index].boundingBoxHeight = objectBox->boundingBoxHeight;
-
-}
-
-/** @description    : update SmarttnMetadat_thumb details to sm from the rtMessage m
- *  @param[in]      : smInfo
- *  @param[in]      : rtMessage m
- *  @return         : void
- */
-void SmarttnMetadata_thumb::from_rtMessage(SmarttnMetadata_thumb *smInfo, const rtMessage m)
-{
-    int32_t len =0;
-
-    if(!smInfo) {
-        RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error smInfo should not be NULL\n",__FUNCTION__,__LINE__);
-        return;
-    }
-
-    rtMessage_GetString(m, "timestamp", &(smInfo->strFramePTS));
-    rtMessage_GetInt32(m, "event_type", &(smInfo->event_type));
-    rtMessage_GetDouble(m, "motionScore", &(smInfo->motionScore));
-    rtMessage_GetString(m, "currentTime", &(smInfo->s_curr_time));
-    //unionBox
-    rtMessage_GetInt32(m, "boundingBoxXOrd", &(smInfo->unionBox.boundingBoxXOrd));
-    rtMessage_GetInt32(m, "boundingBoxYOrd", &(smInfo->unionBox.boundingBoxYOrd));
-    rtMessage_GetInt32(m, "boundingBoxWidth", &(smInfo->unionBox.boundingBoxWidth));
-    rtMessage_GetInt32(m, "boundingBoxHeight", &(smInfo->unionBox.boundingBoxHeight));
-
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): strFramePTS:%s \n", __FUNCTION__ , __LINE__, smInfo->strFramePTS);
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): event Type: %d\n",__FILE__, __LINE__, smInfo->event_type);
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): motionScore: %f\n",__FILE__, __LINE__, smInfo->motionScore);
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): boundingBoxXOrd:%d\n", __FILE__, __LINE__, smInfo->unionBox.boundingBoxXOrd);
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): boundingBoxYOrd:%d\n", __FILE__, __LINE__, smInfo->unionBox.boundingBoxYOrd);
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): boundingBoxWidth:%d\n", __FILE__, __LINE__, smInfo->unionBox.boundingBoxWidth);
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): boundingBoxHeight:%d\n", __FILE__, __LINE__, smInfo->unionBox.boundingBoxHeight);
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): curr timestamp:%s\n", __FILE__, __LINE__, smInfo->s_curr_time);
-
-    rtMessage_GetArrayLength(m, "objectBoxs", &len);
-
-    //objectBoxs
-    for (int32_t i = 0; i < len; i++)
-    {
-        rtMessage bbox;
-        rtMessage_GetMessageItem(m, "objectBoxs", i, &bbox);
-        rtMessage_GetInt32(bbox, "boundingBoxXOrd", &(smInfo->objectBoxs[i].boundingBoxXOrd));
-        rtMessage_GetInt32(bbox, "boundingBoxYOrd", &(smInfo->objectBoxs[i].boundingBoxYOrd));
-        rtMessage_GetInt32(bbox, "boundingBoxWidth", &(smInfo->objectBoxs[i].boundingBoxWidth));
-        rtMessage_GetInt32(bbox, "boundingBoxHeight", &(smInfo->objectBoxs[i].boundingBoxHeight));
-
-        RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxXOrd:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxXOrd);
-        RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxYOrd:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxYOrd);
-        RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxWidth:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxWidth);
-        RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxHeight:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxHeight);
-
-        free(bbox);
-    }
-
-
-}
-/* @description: SmarttnMetadata_thumb constructor
- * @parametar: void
- * @return: void
- */
-SmarttnMetadata_thumb::SmarttnMetadata_thumb()
-{
-    strFramePTS = NULL;
-    event_type = 0;
-    motionScore = 0;
-    memset(&unionBox, 0, sizeof(unionBox));
-    memset(objectBoxs, INVALID_BBOX_ORD, sizeof(objectBoxs));
-    s_curr_time = NULL;
-}
-

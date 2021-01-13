@@ -111,11 +111,6 @@ extern "C" {
 #define STN_MAX( a, b ) ( ( a > b) ? a : b )
 #define STN_MIN( a, b ) ( ( a < b) ? a : b )
 
-#define UPPER_LIMIT_BLOB_BB     5
-#define MAX_BLOB_SIZE           4
-#define BLOB_BB_MAX_LEN         256
-#define INVALID_BBOX_ORD        (-1)
-
 typedef enum {
     STH_ERROR = -1,
     STH_SUCCESS,
@@ -155,14 +150,6 @@ typedef struct {
     uint64_t currTime;
     cv::Mat  maxBboxObjYUVFrame;
 }objFrameData;
-
-typedef struct _tBoundingBox
-{
-    int32_t boundingBoxXOrd;
-    int32_t boundingBoxYOrd;
-    int32_t boundingBoxWidth;
-    int32_t boundingBoxHeight;
-}BoundingBox;
 
 class SmartThumbnail
 {
@@ -215,8 +202,6 @@ class SmartThumbnail
 	void resetObjFrameData();
 	//Updates object frame
 	void  updateObjFrameData(int32_t boundingBoxXOrd,int32_t boundingBoxYOrd,int32_t boundingBoxWidth,int32_t boundingBoxHeight,uint64_t currTime);
-        //Updates object Boxes
-        void  updateObjectBoxs(BoundingBox *objectBox, int32_t index);
 	int retryAtExpRate();
 
 	//Read the High resolution YUV frame.
@@ -295,23 +280,6 @@ class SmartThumbnail
     	char firmwareName[FW_NAME_MAX_LENGTH];
 	static int waitingInterval;
 	cv::Rect relativeBBox;
-        BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
-};
-
-struct SmarttnMetadata_thumb
-{
-
-    /*SmarttnMetadata constructor*/
-    SmarttnMetadata_thumb();
-    /*update sm details with rtMessage m*/
-    static void from_rtMessage(SmarttnMetadata_thumb *smInfo, const rtMessage m);
-
-    char const *strFramePTS;
-    int32_t event_type;
-    double motionScore;
-    BoundingBox unionBox;
-    BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
-    char const *s_curr_time;
 };
 
 #endif //__SMART_THUMBNAIL_H__
