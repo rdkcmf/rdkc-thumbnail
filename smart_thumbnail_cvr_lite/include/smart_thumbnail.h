@@ -232,6 +232,8 @@ class SmartThumbnail
 	HttpClient* httpClient;
 	int dnsCacheTimeout;
 	STHPayload payload;
+
+	uint64_t prev_time;
 	int32_t event_quiet_time;
 	char smtTnUploadURL[CONFIG_STRING_MAX];
 	char smtTnAuthCode[AUTH_TOKEN_MAX];
