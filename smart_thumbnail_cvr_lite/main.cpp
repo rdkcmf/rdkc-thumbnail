@@ -169,78 +169,54 @@ int main(int argc, char** argv)
 		}
 #endif		
 		//create payload
-		int event_quiet_time = smTnInstance->getQuietInterval();
-                
-		if(startTime.tv_sec >= (prevTime.tv_sec + event_quiet_time))
-		{
-			status = smTnInstance->createPayload();
-			
-			if ( (STH_NO_PAYLOAD == status) ||
-		    		(STH_ERROR == status) ) {
-					RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Unable to create payload for smart thumnail, hence skipping!!!\n", __FILE__, __LINE__);
+		status = smTnInstance->createPayload();
+		if ( (STH_NO_PAYLOAD == status) ||
+	    		(STH_ERROR == status) ) {
+				RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Unable to create payload for smart thumnail, hence skipping!!!\n", __FILE__, __LINE__);
 
-					//clock current time
-					memset(&currTime, 0, sizeof(currTime));
-	        			clock_gettime(CLOCK_REALTIME, &currTime);
-					RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Time spent for payload creation %d seconds!!!\n", __FILE__, __LINE__, (currTime.tv_sec - startTime.tv_sec));
+				//clock current time
+				memset(&currTime, 0, sizeof(currTime));
+	       			clock_gettime(CLOCK_REALTIME, &currTime);
+				RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Time spent for payload creation %d seconds!!!\n", __FILE__, __LINE__, (currTime.tv_sec - startTime.tv_sec));
 
-					// sleep maximum of smart thumbnail time interval(~15 seconds)
-					if( (currTime.tv_sec - startTime.tv_sec) >= STN_UPLOAD_TIME_INTERVAL ) {
-						RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exceed upload time interval!!!\n", __FILE__, __LINE__);
-						continue;
-					} else {
-						remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
-						RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
-						sleep (remainingTime);
-						continue;
-					}
-                	}
+				// sleep maximum of smart thumbnail time interval(~15 seconds)
+				if( (currTime.tv_sec - startTime.tv_sec) >= STN_UPLOAD_TIME_INTERVAL ) {
+					RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exceed upload time interval!!!\n", __FILE__, __LINE__);
+					continue;
+				} else {
+					remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
+					RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
+					sleep (remainingTime);
+					continue;
+				}
+                }
 
-			RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Created payload for smart thumnail successfully.. Going to upload now!!!\n", __FILE__, __LINE__);
+		RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Created payload for smart thumnail successfully.. Going to upload now!!!\n", __FILE__, __LINE__);
 
-			// clock the current time
-			memset(&currTime, 0, sizeof(currTime));
-	        	clock_gettime(CLOCK_REALTIME, &currTime);
-			RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): currTime.tv_sec %d startTime.tv_sec %d (currTime.tv_sec - startTime.tv_sec)!!!\n", __FILE__, __LINE__, currTime.tv_sec, startTime.tv_sec, (currTime.tv_sec - startTime.tv_sec));
+		// clock the current time
+		memset(&currTime, 0, sizeof(currTime));
+	       	clock_gettime(CLOCK_REALTIME, &currTime);
+		RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): currTime.tv_sec %d startTime.tv_sec %d (currTime.tv_sec - startTime.tv_sec)!!!\n", __FILE__, __LINE__, currTime.tv_sec, startTime.tv_sec, (currTime.tv_sec - startTime.tv_sec));
 
-			// clock the current time
-			memset(&currTime, 0, sizeof(currTime));
-	        	clock_gettime(CLOCK_REALTIME, &currTime);
-		
-			if(STH_SUCCESS == smTnInstance->uploadPayload(STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec)))
-                	{
-				memset(&prevTime, 0, sizeof(prevTime));
-                        	clock_gettime(CLOCK_REALTIME, &prevTime);
-                	}
+	        smTnInstance->uploadPayload(STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec));
 
-			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Time spent to upload smart thumbnail %d seconds!!!\n", __FILE__, __LINE__, (currTime.tv_sec - startTime.tv_sec));
-			if( (currTime.tv_sec - startTime.tv_sec) >= STN_UPLOAD_TIME_INTERVAL ) {
-				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exceed upload time interval!!!\n", __FILE__, __LINE__);
-				continue;
-			}
-			else {
-				//calculate the time needed to sleep for next interval.
-				remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
-				RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
-				sleep (remainingTime);
-			}
+		// clock the current time
+		memset(&currTime, 0, sizeof(currTime));
+	       	clock_gettime(CLOCK_REALTIME, &currTime);
+
+		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Time spent to upload smart thumbnail %d seconds!!!\n", __FILE__, __LINE__, (currTime.tv_sec - startTime.tv_sec));
+		if( (currTime.tv_sec - startTime.tv_sec) >= STN_UPLOAD_TIME_INTERVAL ) {
+			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exceed upload time interval!!!\n", __FILE__, __LINE__);
+			continue;
 		}
-		else
-		{
-			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): [Quite Time] Sleeping for %d seconds \n", __FILE__, __LINE__, event_quiet_time);
-			#ifdef _HAS_DING_
-			bool isTimedOut = smTnInstance -> waitFor(event_quiet_time);
-			//Upon ding we need to process the motion notification immediatley
-			if(!isTimedOut)
-			{
-				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Ding !!!  need to send the motion notification immediatly \n", __FILE__, __LINE__);
-				memset(&prevTime, 0, sizeof(prevTime));
-			}
-			#else
-				sleep(event_quiet_time);
-			#endif
-		}	
+		else {
+			//calculate the time needed to sleep for next interval.
+			remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
+			RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
+			sleep (remainingTime);
+		}
 	}
+
 	//notify exit status
 	smTnInstance -> notify("stop");
 

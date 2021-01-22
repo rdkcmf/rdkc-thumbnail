@@ -93,6 +93,7 @@ SmartThumbnail::SmartThumbnail():dnsCacheTimeout(STN_DEFAULT_DNS_CACHE_TIMEOUT),
 				hres_y_height(0),
 				hres_y_width(0),
 				cvrEnabled(false),
+                                prev_time(0),
 				maxBboxArea(0),
 				event_quiet_time(STN_DEFAULT_EVT_QUIET_TIME)
 {
@@ -440,25 +441,6 @@ STH_STATUS SmartThumbnail::createPayload()
 	    getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
 	    relativeBBox = getRelativeBoundingBox(unionBox, cropSize, allignedCenter);
 
-#if 0
-	    // create cropped object
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):before cropping object frame.\n", __FILE__, __LINE__);
-            croppedObj = lHresRGBMat(unionBox).clone();
-            RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):after cropping object frame.\n", __FILE__, __LINE__);
-            // Resize object to fixed resolution, keep aspect ratio
-            RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):before resizing object frame.\n", __FILE__, __LINE__);
-            resizeAspect(croppedObj, sTnWidth, sTnHeight, resizedCroppedObject);
-            RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):after resizing object frame.\n", __FILE__, __LINE__);
-
-            payload.objFrame = resizedCroppedObject.clone();
-	    //resize the RGG data to required size.
-	    cv::resize(lHresRGBMat,resizedRGBMat,cv::Size(sTnWidth,sTnHeight));
-	    payload.objFrame = resizedRGBMat.clone();
-
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Resized the cropped object frame.\n", __FILE__, __LINE__);
-	    cv::resize(croppedObj, resizedRGBMat,cv::Size(sTnWidth, sTnHeight));
-	    payload.objFrame = resizedRGBMat.clone();
-#endif
 #ifdef USE_FILE_UPLOAD
             memset(&currTime, 0, sizeof(currTime));
             clock_gettime(CLOCK_REALTIME, &currTime);
@@ -834,6 +816,10 @@ void SmartThumbnail::onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const
     uint64_t hResFramePTS = 0;
     struct timespec currTime;
 
+    //clock the current time
+    memset (&currTime, 0, sizeof(struct timespec));
+    clock_gettime(CLOCK_REALTIME, &currTime);
+
     // read the message received
     (void) closure;
     rtMessage m;
@@ -849,6 +835,17 @@ void SmartThumbnail::onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): lResframePTS:%llu\n", __FUNCTION__, __LINE__, lResFramePTS);
 
     rtMessage_Release(m);
+
+
+    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):prev_time :%d\n", __FUNCTION__ , __LINE__, smartThInst -> prev_time);
+
+    // ignore frames and metadata for event_quiet_time
+    if( (currTime.tv_sec < (smartThInst -> prev_time + smartThInst -> event_quiet_time)) &&  (0 != smartThInst -> prev_time) ) {
+        RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Within event quiet time, Ignoring event, time passed: %lu\n", __FUNCTION__ , __LINE__, (currTime.tv_sec- smartThInst -> prev_time));
+	return;
+    }
+
+    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Not within event quiet time, Capturing frame.\n", __FUNCTION__ , __LINE__);
 
     //read the 720*1280 YUV data.
     std::unique_lock<std::mutex> lock(smartThInst -> QMutex);
@@ -973,6 +970,8 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
             updateObjFrameData(boundingBoxXOrd, boundingBoxYOrd, boundingBoxWidth, boundingBoxHeight, curr_time);
 	    lock.unlock();
 	}
+
+	smartThInst -> prev_time = curr_time;
     } else {
     	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Metadata discarded .\n", __FUNCTION__ , __LINE__);
     }
@@ -1290,7 +1289,7 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
 
         if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
 
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-EVENT-TIME: %llu X-BoundingBox: %d %d %d %d  X-VIDEO-RECORDING :OFF\n", __FUNCTION__, __LINE__, sTnTStamp, relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height);
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-EVENT-DATETIME: %s X-BoundingBox: %d %d %d %d  X-VIDEO-RECORDING :OFF\n", __FUNCTION__, __LINE__, sTnTStamp, relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height);
 
             break;
 
