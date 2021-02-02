@@ -1644,6 +1644,7 @@ void SmartThumbnail::uploadPayload()
 
             curlCode =  smartThInst->httpClient->post_binary(smartThInst -> smtTnUploadURL, dataPtr, &response_code, dataLen, remainingTime);
 #endif
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): stn upload url is %s\n", __FUNCTION__, __LINE__, smartThInst -> smtTnUploadURL);
             if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START))
             {
                 break;
