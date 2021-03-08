@@ -24,7 +24,9 @@
 #ifdef BREAKPAD
 #include "breakpadwrap.h"
 #endif
-
+#ifdef _OBJ_DETECTION_	
+SmartThumbnail *smTnInstance = NULL;
+#endif
 #if 0 
 /** @description: Checks if the feature is enabled via RFC
  *  @param[in] rfc_feature_fname: RFC feature filename
@@ -63,7 +65,9 @@ bool checkEnabledRFCFeature(char* rfcFeatureFname, char* featureName)
 
 int main(int argc, char** argv)
 {
+#ifndef _OBJ_DETECTION_	
 	SmartThumbnail *smTnInstance = NULL;
+#endif
 	STH_STATUS status = STH_SUCCESS;
         time_t remainingTime = 0;
 	char *param = NULL;
@@ -76,6 +80,7 @@ int main(int argc, char** argv)
 	memset(&currTime, 0, sizeof(currTime));
 	memset(&prevTime, 0, sizeof(prevTime));
 	int itr =0;
+        int isDetectionEnabled = 0;
 
 	/* Registering callback function for Breakpadwrap Function */
 #ifdef BREAKPAD
@@ -124,6 +129,20 @@ int main(int argc, char** argv)
                                 break;
                         }
                 }
+
+                if(strcmp(argv[itr],"--detectionEnabled")==0)
+                {
+                        itr++;
+
+                        if (itr < argc)
+                        {
+                                isDetectionEnabled = atoi(argv[itr]);
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
                 itr++;
     	}
 
@@ -140,7 +159,7 @@ int main(int argc, char** argv)
 	}
 
 	//initialize smart thumbnail
-	status = smTnInstance-> init(param,cvrEnabled);
+	status = smTnInstance-> init(param,cvrEnabled, isDetectionEnabled);
 	if (STH_ERROR == status) {
     	    RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error creating Smart thumbnail instance.\n", __FILE__, __LINE__);
 	    return STH_ERROR;
