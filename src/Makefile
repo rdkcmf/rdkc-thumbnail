@@ -74,6 +74,7 @@ clean:
 install:
 	$(INSTALL)  -D  $(RELEASE_TARGET) ${RDK_SDROOT}/usr/local/bin/$(RELEASE_TARGET)
 	$(PLATFORM_BREAKPAD_BINARY) $(DEBUG_TARGET) > $(RELEASE_TARGET).sym
+	sed -i "1s/$(DEBUG_TARGET)/$(RELEASE_TARGET)/" $(RELEASE_TARGET).sym
 	mv -f $(RELEASE_TARGET).sym  $(PLATFORM_SYMBOL_PATH)
 	echo "Debug symbol created for $(RELEASE_TARGET)"
 
