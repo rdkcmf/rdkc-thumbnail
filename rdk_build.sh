@@ -47,7 +47,7 @@ export RDK_DIR=$BUILDS_DIR
 export ENABLE_RDKC_LOGGER_SUPPORT=true
 export DCA_PATH=$RDK_SOURCE_PATH
 
-if [ "$XCAM_MODEL" == "SCHC2" ] || [ "$XCAM_MODEL" == "XHB1" ]; then
+if [ "$XCAM_MODEL" == "SCHC2" ] || [ "$XCAM_MODEL" == "XHB1" ] || [ "$XCAM_MODEL" == "XHC3" ]; then
     echo "Enable xStreamer by default for xCam2 and DBC"
     export ENABLE_XSTREAMER=true
 else

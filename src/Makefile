@@ -44,6 +44,10 @@ CFLAGS += -DOSI
 CFLAGS  += -I../ding
 SRCS += ../ding/DingNotification.cpp
 endif
+ifeq ($(XCAM_MODEL), XHC3)
+CFLAGS += -DUSE_MFRLIB
+CFLAGS += -DOSI
+endif
 CFLAGS  += -g -std=c++14 -fPIC -Wall -Wextra
 SRCS   += thumbnailUpload.cpp
 SRCS   += thumbnail_upload_main.cpp

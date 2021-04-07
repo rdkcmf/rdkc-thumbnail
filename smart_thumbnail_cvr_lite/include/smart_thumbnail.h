@@ -73,7 +73,7 @@ extern "C" {
 
 #ifdef XCAM2
 #define STN_HRES_BUFFER_ID              2
-#elif XHB1
+#elif defined(XHB1) || defined (XHC3)
 #define STN_HRES_BUFFER_ID              2
 #else
 #define STN_HRES_BUFFER_ID              0

@@ -35,7 +35,12 @@ USE_DEWARP = yes
 #SRC += ../ding/DingNotification.cpp
 #CFLAGS  += -I../ding
 else
+ifeq ($(XCAM_MODEL), XHC3)
+CFLAGS  += -DXHC3
+USE_DEWARP = yes
+else
 SUPPORT_MXML = yes
+endif
 endif
 
 ifeq ($(XCAM_MODEL), SCHC2)
