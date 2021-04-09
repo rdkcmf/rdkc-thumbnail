@@ -93,6 +93,7 @@ extern "C" {
 
 #define STN_TIMESTAMP_TAG		"timestamp"
 #define STN_UPLOAD_TIME_INTERVAL	30
+#define STN_UPLOAD_THRESHOLD_INTERVAL	60
 
 #define STN_PATH 			"/tmp"
 //#define STN_PATH			"."
@@ -156,7 +157,7 @@ class SmartThumbnail
     public:
 	static SmartThumbnail* getInstance();
 	//Initialize the buffers and starts msg monitoring, upload thread.
-	STH_STATUS init(char* mac,bool isCVREnabled);
+	STH_STATUS init(char* mac,bool isCVREnabled,int stnondelayType,int stnondelayTime);
 	//get upload status
 	bool getUploadStatus();
 	//set upload status
@@ -177,6 +178,7 @@ class SmartThumbnail
 	~SmartThumbnail();
 	STH_STATUS saveSTN();
 	STH_STATUS addSTN();
+        STH_STATUS checkSTN();
 	STH_STATUS delSTN(char* uploadFname);
 	void printSTNList();
 	STH_STATUS createPayload(char* uploadFname);
@@ -261,6 +263,8 @@ class SmartThumbnail
 	std::vector<STHPayload> STNList;
 	bool cvrClipGenStarted;
 	bool cvrEnabled;
+        int stnOnDelayType;
+        int stnOnDelayTime;
 	HttpClient* httpClient;
 	int dnsCacheTimeout;
 	STHPayload currSTN;

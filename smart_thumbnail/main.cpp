@@ -33,6 +33,8 @@ int main(int argc, char** argv)
 	char *param = NULL;
     	const char* debugConfigFile = "/etc/debug.ini";
     	int  cvrEnabled = 0;
+        int  stnondelayType = 0;
+        int  stnondelayTime = 60;
 
 	struct timespec currTime;
 	struct timespec startTime;
@@ -91,6 +93,34 @@ int main(int argc, char** argv)
                                 break;
                         }
                 }
+
+                if(strcmp(argv[itr],"--stnondelaytype")==0)
+                {
+                        itr++;
+
+                        if (itr < argc)
+                        {
+                                stnondelayType = atoi(argv[itr]);
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+
+                if(strcmp(argv[itr],"--stnondelaytime")==0)
+                {
+                        itr++;
+
+                        if (itr < argc)
+                        {
+                                stnondelayTime = atoi(argv[itr]);
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
                 itr++;
     	}
 
@@ -105,7 +135,7 @@ int main(int argc, char** argv)
 	}
 
 	//initialize smart thumbnail
-	status = smTnInstance-> init(param,cvrEnabled);
+	status = smTnInstance-> init(param,cvrEnabled,stnondelayType,stnondelayTime);
 	if (STH_ERROR == status) {
     	    RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error creating Smart thumbnail instance.\n", __FILE__, __LINE__);
 	    return STH_ERROR;

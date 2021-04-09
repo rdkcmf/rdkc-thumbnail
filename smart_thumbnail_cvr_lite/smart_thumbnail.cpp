@@ -1157,6 +1157,7 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
     char packHead[STN_UPLOAD_SEND_LEN+1];
     int retry = 0;
     char sTnTStamp[256]={0};
+    time_t stnTS = (time_t)(smartThInst->payload.tstamp);
     struct timespec currTime;
     struct timespec startTime;
     memset(&startTime, 0, sizeof(startTime));
@@ -1289,9 +1290,9 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
         RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): stn upload url is %s\n", __FUNCTION__, __LINE__, smtTnUploadURL);
 
         if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
-
+            clock_gettime(CLOCK_REALTIME, &currTime);
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-EVENT-DATETIME: %s X-BoundingBox: %d %d %d %d  X-VIDEO-RECORDING :OFF\n", __FUNCTION__, __LINE__, sTnTStamp, relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height);
-
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): StnTimestamp,CurrentTimestamp,Latency:%ld,%ld,%ld\n",__FUNCTION__,__LINE__, stnTS, currTime.tv_sec, (currTime.tv_sec-stnTS));
             break;
 
         } else {
