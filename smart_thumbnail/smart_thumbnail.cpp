@@ -935,7 +935,6 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
 {
     int clipGenStatus = -1;
     char const*  cvrClipFname = NULL;
-    char const*  cvrEvtTstamp = NULL;
     uint64_t cvrEventTS = 0;
     const char* delimPos = 0;
     rtConnection con = (rtConnection) closure;
@@ -945,11 +944,9 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
 
     rtMessage_GetInt32(req, "clipStatus", &clipGenStatus);
     rtMessage_GetString(req, "clipname" , &cvrClipFname);
-    rtMessage_GetString(req, "eventTimeStamp" , &cvrEvtTstamp);
 
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d CVR clip status: %d\n", __FUNCTION__, __LINE__, clipGenStatus);
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d CVR clip name: %s\n", __FUNCTION__, __LINE__, cvrClipFname);
-    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d CVR event timestamp: %s\n", __FUNCTION__, __LINE__, cvrEvtTstamp);
 
     //take action on clip gen status
     if(clipGenStatus == CVR_CLIP_GEN_START) {
@@ -972,28 +969,16 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
 	}
 
 	if((smartThInst->cvrClipGenStarted) &&
-	   (smartThInst->isPayloadAvailable) &&
-		// to check if motion in the clip
-	   (0 != strcmp("TIMESTAMP_NOT_AVAILABLE", cvrEvtTstamp))) {
+	   (smartThInst->isPayloadAvailable)) {
 		//save smart thumbnail from memory to file
 		smartThInst->saveSTN();
 		smartThInst->addSTN();
                 smartThInst->checkSTN();
 		smartThInst->cvrClipGenStarted = false;
-
-		std::istringstream iss(cvrEvtTstamp);
-		iss >> cvrEventTS;
-		RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Motion Timestamp: %llu\n", __FUNCTION__, __LINE__, cvrEventTS);
-		iss.clear();
-		smartThInst->motion_time = cvrEventTS;
 	}
 
 	if(!smartThInst->isPayloadAvailable) {
 		RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d \t3. Smart Thumbnail is not available during current period.\n", __FUNCTION__, __LINE__);
-	}
-
-	if(0 == strcmp("TIMESTAMP_NOT_AVAILABLE", cvrEvtTstamp)) {
-		RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d \t4. Motion Timestamp is not available during current period.\n", __FUNCTION__, __LINE__);
 	}
 
 
