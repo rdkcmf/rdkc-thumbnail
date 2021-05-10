@@ -2002,19 +2002,7 @@ void SmarttnMetadata_thumb::from_rtMessage(SmarttnMetadata_thumb *smInfo, const 
         RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxYOrd:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxYOrd);
         RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxWidth:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxWidth);
         RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxHeight:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxHeight);
-        /* TODO: These 5 lines of code is added as a temporary fix for tickets : RDKC-8609, RDKC-8781.
-        
-        As part of task: RDKC-8598, the xcam2 uses the rtmessage under libexchanger. And all other
-        cameras uses the opensource/src/rtMessage. So the implementation of rtMessage_GetMessageItem()
-	for xcam2 is different from that of with other cameras. So, to release the memory allocated for
-        'bbox' in xcam2 we need only a free() (since it only creates an exact copy of the child message). 
-	But, as per the opensource/src/rtMessage, it requires rtMessage_Release() to free the memory 
-        associated with child */
-#ifdef XCAM2
-        free(bbox);
-#else
         rtMessage_Release(bbox);
-#endif
     }
 
 
