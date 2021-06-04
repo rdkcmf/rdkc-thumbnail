@@ -227,13 +227,14 @@ class SmartThumbnail
 	static void onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	static void onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	static void onMsgCvrUpload(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
-	static void onMsgRefreshTnUpload(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+	static void onMsgRefresh(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	static void dynLogOnMessage(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	//Routine to upload STN Payload
 	static void uploadSTN();
 
         static volatile bool termFlag;
         static volatile bool tnUploadConfRefreshed;
+        static volatile bool eventConfRefreshed;
 
 	static SmartThumbnail* smartThInst;
 
@@ -301,6 +302,7 @@ class SmartThumbnail
 	cv::Rect relativeBBox;
 	cv::Rect smartThumbCoord;
         BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
+        time_t stnUploadTime;
 };
 
 struct SmarttnMetadata_thumb

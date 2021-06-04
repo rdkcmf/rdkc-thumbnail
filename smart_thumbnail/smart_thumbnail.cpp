@@ -24,6 +24,7 @@
 SmartThumbnail* SmartThumbnail::smartThInst = NULL;
 volatile bool SmartThumbnail::termFlag = false;
 volatile bool SmartThumbnail::tnUploadConfRefreshed = false;
+volatile bool SmartThumbnail::eventConfRefreshed = false;
 int SmartThumbnail::waitingInterval = 1 ;
 
 /** @description: Constructor
@@ -59,7 +60,8 @@ SmartThumbnail::SmartThumbnail():
                                 stnOnDelayTime(STN_UPLOAD_THRESHOLD_INTERVAL),
 				dnsCacheTimeout(STN_DEFAULT_DNS_CACHE_TIMEOUT),
 				sTnHeight(STN_DEFAULT_HEIGHT),
-				sTnWidth(STN_DEFAULT_WIDTH)
+				sTnWidth(STN_DEFAULT_WIDTH),
+                                stnUploadTime(0)
 {
     memset(uploadFname, 0, sizeof(uploadFname));
     memset(smtTnUploadURL, 0, sizeof(smtTnUploadURL));
@@ -373,8 +375,8 @@ STH_STATUS SmartThumbnail::saveSTN()
 	//Acquire lock
 	//std::unique_lock<std::mutex> lock(stnMutex);
 	if (isPayloadAvailable) {
-            RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Payload is available.\n", __FILE__, __LINE__);
 	    currSTN.tstamp   = ofData.currTime;
+            RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Payload is available timestamp is %ld\n", __FILE__, __LINE__,currSTN.tstamp);
 
 	    // matrix to store color image
 	    lHresRGBMat = cv::Mat(hres_y_height, hres_y_width, CV_8UC4);
@@ -902,9 +904,10 @@ void SmartThumbnail::onDingNotification(rtMessageHeader const* hdr, uint8_t cons
  *  @param[in] closure : void pointer
  *  @return: void
  */
-void SmartThumbnail::onMsgRefreshTnUpload(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure)
+void SmartThumbnail::onMsgRefresh(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure)
 {
     char const*  status = NULL;
+    char const*  config = NULL;
 
     rtConnection con = (rtConnection) closure;
 
@@ -919,13 +922,14 @@ void SmartThumbnail::onMsgRefreshTnUpload(rtMessageHeader const* hdr, uint8_t co
     free(tempbuff);
 
     rtMessage_GetString(req, "status", &status);
+    rtMessage_GetString(req, "config", &config);
 
-    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d status:%s\n", __FUNCTION__, __LINE__, status);
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d status:%s,config:%s\n", __FUNCTION__, __LINE__, status, config);
 
-    if(!strcmp(status, "refresh")) {
+    if( (!strcmp(status, "refresh")) && (!strcmp(config, TN_CONFIG_FILE)) ) {
         tnUploadConfRefreshed = true;
-    } else {
-        tnUploadConfRefreshed = false;
+    } else if( (!strcmp(status, "refresh")) && (!strcmp(config, EVENTS_CONFIG_FILE)) ) {
+        eventConfRefreshed = true;
     }
 
     rtMessage_Release(req);
@@ -976,12 +980,26 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
 
 	if((smartThInst->cvrClipGenStarted) &&
 	   (smartThInst->isPayloadAvailable)) {
-		//save smart thumbnail from memory to file
-		smartThInst->saveSTN();
-		smartThInst->addSTN();
+            struct timespec currTime;
+            bool ignoreMotion = false;
+	    memset (&currTime, 0, sizeof(struct timespec));
+            clock_gettime(CLOCK_REALTIME, &currTime);
+	    if((currTime.tv_sec - smartThInst->stnUploadTime) < smartThInst->event_quiet_time)
+	    {
+                ignoreMotion = true;
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr time %ld prev motion upload time %ld\n", __FILE__, __LINE__, currTime.tv_sec, smartThInst->stnUploadTime);
+	    } else {
+                ignoreMotion = false;
+            }
+            //save smart thumbnail from memory to file
+            if( false == ignoreMotion )
+            {
+                smartThInst->saveSTN();
+                smartThInst->addSTN();
                 smartThInst->checkSTN();
-		smartThInst->cvrClipGenStarted = false;
-	}
+                smartThInst->cvrClipGenStarted = false;
+	    }
+        }
 
 	if(!smartThInst->isPayloadAvailable) {
 		RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d \t3. Smart Thumbnail is not available during current period.\n", __FUNCTION__, __LINE__);
@@ -1457,7 +1475,7 @@ STH_STATUS SmartThumbnail::rtMsgInit()
     rtConnection_AddListener(connectionRecv, "RDKC.SMARTTN.METADATA",onMsgProcessFrame, NULL);
     rtConnection_AddListener(connectionRecv, "RDKC.CVR.CLIP.STATUS",onMsgCvr, NULL);
     rtConnection_AddListener(connectionRecv, "RDKC.CVR.UPLOAD.STATUS",onMsgCvrUpload, NULL);
-    rtConnection_AddListener(connectionRecv, "RDKC.CONF.TNUPLOAD.REFRESH",onMsgRefreshTnUpload, NULL);
+    rtConnection_AddListener(connectionRecv, "RDKC.CONF.REFRESH",onMsgRefresh, NULL);
 #ifdef _HAS_DING_
     rtConnection_AddListener(connectionRecv, "RDKC.BUTTON.DOORBELL",onDingNotification, NULL);
 #endif
@@ -1783,7 +1801,7 @@ void SmartThumbnail::uploadSTN()
             memset(smartThInst->smtTnAuthCode, 0 , sizeof(smartThInst->smtTnAuthCode));
 
             if(STH_SUCCESS == smartThInst -> getTnUploadConf()) {
-                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): getTnUploadConf success!!", __FUNCTION__, __LINE__);
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): getTnUploadConf success!!\n", __FUNCTION__, __LINE__);
             }
 
             /* Open the URL */
@@ -1795,6 +1813,13 @@ void SmartThumbnail::uploadSTN()
             }
 
             tnUploadConfRefreshed = false;
+        }
+
+        if(eventConfRefreshed) {
+            if(STH_SUCCESS == smartThInst->getEventConf()) {
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): getEventConf success!!\n", __FUNCTION__, __LINE__);
+            }
+            eventConfRefreshed = false;
         }
 
 	if(smartThInst -> getUploadStatus()) {
