@@ -394,6 +394,12 @@ STH_STATUS SmartThumbnail::saveSTN()
 	    getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
 	    relativeBBox = getRelativeBoundingBox(unionBox, cropSize, allignedCenter);
 
+           //Update cropped SmartThumbnail Coordinates
+           smartThumbCoord.x = (allignedCenter.x - (cropSize.width / 2));
+           smartThumbCoord.y = (allignedCenter.y - (cropSize.height / 2));
+           smartThumbCoord.width = cropSize.width;
+           smartThumbCoord.height = cropSize.height;
+
 #if 0
 	    // create cropped object
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):before cropping object frame.\n", __FILE__, __LINE__);
@@ -1511,6 +1517,7 @@ void SmartThumbnail::uploadPayload()
     int curlCode = 0;
     long response_code = 0;
     char objectBoxsBuf[BLOB_BB_MAX_LEN] = {0};
+    char smartThumbBuf[BLOB_BB_MAX_LEN] = {0};
 #ifdef USE_FILE_UPLOAD
     char *data  = NULL;
     struct stat fileStat;
@@ -1665,12 +1672,17 @@ void SmartThumbnail::uploadPayload()
                 snprintf(objectBoxsBuf, sizeof(objectBoxsBuf), "(%d, %d, %d, %d)," , smartThInst ->objectBoxs[i].boundingBoxXOrd, smartThInst ->objectBoxs[i].boundingBoxYOrd , smartThInst ->objectBoxs[i].boundingBoxWidth, smartThInst ->objectBoxs[i].boundingBoxHeight );
                 strcat(packHead, objectBoxsBuf);
             }
-            if(packHead[strlen(packHead) -1] == ',') {
-                packHead[strlen(packHead)-1] = '\0';
-            }
+
+            memset(smartThumbBuf, 0 , sizeof(smartThumbBuf));
+            snprintf(smartThumbBuf, sizeof(smartThumbBuf), "(%d, %d, %d, %d)", smartThumbCoord.x, smartThumbCoord.y, smartThumbCoord.width, smartThumbCoord.height);
+            smartThumbBuf[strlen(smartThumbBuf)] = '\0';
+            strcat(packHead, smartThumbBuf);
+            packHead[strlen(packHead)] = '\0';
+
             memset(objectBoxsBuf, 0 , sizeof(objectBoxsBuf));
             strcpy(objectBoxsBuf, packHead);
             smartThInst->httpClient->addHeader("X-BoundingBoxes", packHead);
+
             memset(packHead, 0, sizeof(packHead));
             snprintf(packHead, sizeof(packHead), "CVR");
             smartThInst->httpClient->addHeader("X-VIDEO-RECORDING", packHead);
@@ -1710,7 +1722,12 @@ void SmartThumbnail::uploadPayload()
         //log success/failure for telemetry
         if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
             clock_gettime(CLOCK_REALTIME, &currTime);
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-EVENT-TIME: %s X-BoundingBox: %d %d %d %d X-VIDEO-RECORDING:CVR\n",__FUNCTION__,__LINE__,sTnTStamp, relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height);
+#ifdef ENABLE_TEST_HARNESS
+            stnUploadTime = currTstamp;
+#else
+            stnUploadTime = currTime.tv_sec;
+#endif
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-EVENT-TIME: %s X-BoundingBox: %d %d %d %d X-VIDEO-RECORDING:CVR  X-BoundingBoxes: %s\n",__FUNCTION__,__LINE__,sTnTStamp, relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height, objectBoxsBuf);
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): StnTimestamp,CurrentTimestamp,Latency:%ld,%ld,%ld\n",__FUNCTION__,__LINE__, stnTS, currTime.tv_sec, (currTime.tv_sec-stnTS));
         }else {
             RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail upload failed with response code %lu and curl code %d\n",__FUNCTION__,__LINE__, response_code, curlCode);

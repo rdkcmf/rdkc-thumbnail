@@ -299,6 +299,7 @@ class SmartThumbnail
     	char firmwareName[FW_NAME_MAX_LENGTH];
 	static int waitingInterval;
 	cv::Rect relativeBBox;
+	cv::Rect smartThumbCoord;
         BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
 };
 

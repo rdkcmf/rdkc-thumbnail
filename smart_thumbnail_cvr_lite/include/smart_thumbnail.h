@@ -260,6 +260,7 @@ class SmartThumbnail
 	int sTnWidth;
 	char uploadFname[256];
 	cv::Rect relativeBBox;
+	cv::Rect smartThumbCoord;
         BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
 };
 
