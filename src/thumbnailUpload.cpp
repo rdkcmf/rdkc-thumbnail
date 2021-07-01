@@ -111,18 +111,29 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 	memset(cmd,0,MAXSIZE);
 
 #ifdef OSI
+        FileUtils m_settings;
+#ifdef XHB1
         int tn_width = TN_OP_WIDTH_4_3;
         int tn_height = TN_OP_HEIGHT_4_3;
-        FileUtils m_settings;
         std::string aspect_ratio = "4:3";
+#else
+        int tn_width = TN_OP_WIDTH;
+        int tn_height = TN_OP_HEIGHT;
+        std::string aspect_ratio = "16:9";
+#endif
 
         if(!m_settings.loadFromFile(std::string(ASPECTRATIO_FILE)))
         {
+#ifdef XHB1
                 RDK_LOG(RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Loading aspect ratio file failed, setting aspect ratio to default 4:3\n", __FILE__, __LINE__);
+#else
+                RDK_LOG(RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Loading aspect ratio file failed, setting aspect ratio to default 16:9\n", __FILE__, __LINE__);
+#endif
         }
         else
         {
                 m_settings.get("aspectRatio", aspect_ratio);
+#ifdef XHB1
                 if(aspect_ratio.compare("16:9") == 0)
                 {
                         tn_width = TN_OP_WIDTH;
@@ -133,6 +144,18 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 		{
                 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Current aspect ratio is 4:3\n", __FILE__, __LINE__);
 		}
+#else
+                if(aspect_ratio.compare("4:3") == 0)
+                {
+                        tn_width = TN_OP_WIDTH_4_3;
+                        tn_height = TN_OP_HEIGHT_4_3;
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Current aspect ratio is 4:3\n", __FILE__, __LINE__);
+                }
+                else //default aspect ratio 16:9
+                {
+                    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Current aspect ratio is 16:9\n", __FILE__, __LINE__);
+                }
+#endif
         }
         snprintf(cmd,sizeof(cmd)-1, "rdkc_snapshooter %s %d %d %d", SNAPSHOT_FILE, COMPRESSION_SCALE, tn_width, tn_height);
         RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Thumbnail size (width*height) : %d*%d\n", __FILE__, __LINE__, tn_width, tn_height);

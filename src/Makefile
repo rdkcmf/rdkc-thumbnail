@@ -41,6 +41,7 @@ ifeq ($(XCAM_MODEL), XHB1)
 CFLAGS += -DUSE_MFRLIB
 CFLAGS += -D_HAS_DING_
 CFLAGS += -DOSI
+CFLAGS += -DXHB1
 CFLAGS  += -I../ding
 SRCS += ../ding/DingNotification.cpp
 endif
