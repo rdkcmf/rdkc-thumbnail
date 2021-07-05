@@ -1088,7 +1088,6 @@ int ThumbnailUpload::uploadThumbnailImage()
             snprintf(pack_head, sizeof(pack_head), "%s", dTnTStamp);
             http_client->addHeader( "X-EVENT-DATETIME", pack_head);
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Ding: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStamp);
-	    thumbnailUpload ->m_dingTime = 0;
 	}	
 #endif
 	/* Send file to server */
@@ -1198,6 +1197,9 @@ void ThumbnailUpload::onDingNotification(rtMessageHeader const* hdr, uint8_t con
            thumbnailUpload->m_ding->signalDing(true,thumbnailUpload ->m_dingTime);
 	   thumbnailUpload->setUploadStatus(true);
 
+        }
+        else {
+           RDK_LOG(RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","(%s):%d Within quiet time, skip Ding notification. Curr time: %ld prev ding notification time: %ld\n", __FUNCTION__, __LINE__, currTime.tv_sec, thumbnailUpload ->m_dingTime);
         }
     }
     rtMessage_Release(req);
