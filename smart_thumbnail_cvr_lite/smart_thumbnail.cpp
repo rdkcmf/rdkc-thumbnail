@@ -462,9 +462,6 @@ STH_STATUS SmartThumbnail::createPayload()
             imwrite(uploadFname,croppedObj);
 #endif
 
-            smartThInst->logMotionEvent = true;
-            smartThInst->logROIMotionEvent = true;
-
 	    //reset payload flag
 	    smartThInst -> isPayloadAvailable = false;
 	    smartThInst -> maxBboxArea = 0;
@@ -493,6 +490,9 @@ STH_STATUS SmartThumbnail::createPayload()
 	ofData.maxBboxObjYUVFrame.release();
 	//Release lock
 	lock.unlock();
+        logMotionEvent = true;
+        logROIMotionEvent = true;
+
     }
     return ret;
 }
