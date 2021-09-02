@@ -246,6 +246,7 @@ class SmartThumbnail
 	int hres_y_height;
 	int hres_y_width;
 	int hres_uv_size;
+	bool ignoreMotion;
 	bool isHresFrameReady;
 	bool cvrEnabled;
 	HttpClient* httpClient;

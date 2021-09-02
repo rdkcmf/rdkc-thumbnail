@@ -97,7 +97,8 @@ SmartThumbnail::SmartThumbnail():dnsCacheTimeout(STN_DEFAULT_DNS_CACHE_TIMEOUT),
 				maxBboxArea(0),
 				event_quiet_time(STN_DEFAULT_EVT_QUIET_TIME),
                                 logMotionEvent(true),
-                                logROIMotionEvent(true)
+                                logROIMotionEvent(true),
+                                ignoreMotion(false)
 {
     memset(uploadFname, 0, sizeof(uploadFname));
     memset(smtTnUploadURL, 0, sizeof(smtTnUploadURL));
@@ -468,10 +469,18 @@ STH_STATUS SmartThumbnail::createPayload()
 	    smartThInst -> isPayloadAvailable = false;
 	    smartThInst -> maxBboxArea = 0;
 	    ret = STH_SUCCESS;
+        } else if (ignoreMotion == true) { // payload is not available due to event quiet interval
+            // clock the current time
+            memset(&currTime, 0, sizeof(currTime));
+            clock_gettime(CLOCK_REALTIME, &currTime);
+
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr time %ld prev motion upload time %ld\n", __FILE__, __LINE__, currTime.tv_sec, smartThInst->prev_time);
     	} else {
     	    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Nothing to upload.\n", __FILE__, __LINE__);
 	    ret = STH_NO_PAYLOAD;
         }
+        // reset the motion ignore flag
+        ignoreMotion = false;
 #ifdef _HAS_DING_
 	if(smartThInst -> m_dingNotif )
 	{
@@ -915,6 +924,12 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
     int isInsideROI = 0;
 
     (void) closure;
+    struct timespec currTime;
+
+    //clock the current time
+    memset (&currTime, 0, sizeof(struct timespec));
+    clock_gettime(CLOCK_REALTIME, &currTime);
+
 
     rtMessage m;
     rtMessage_FromBytes(&m, buff, n);
@@ -955,6 +970,11 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 
         smartThInst->logROIMotionEvent = false;
         RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Received ROI MOTION from xvision during the current cvr interval,  time received: %llu\n", __FILE__ , __LINE__, curr_time);
+    }
+
+    if( (sm.event_type == 4) && (isInsideROI == 1) &&
+        ((currTime.tv_sec < (smartThInst -> prev_time + smartThInst -> event_quiet_time)) &&  (0 != smartThInst -> prev_time)) ) {
+        smartThInst -> ignoreMotion = true;
     }
 
     // if motion is detected update the metadata.
