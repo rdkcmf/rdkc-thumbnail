@@ -1237,16 +1237,22 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
 
             fd = open(uploadFname, O_RDONLY);
             if (fd <= 0) {
-            	RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to Open smart thumbnail upload File :%s !!!\n", __FILE__, __LINE__, uploadFname);
-		ret = STH_ERROR;
-	    	break;
+                RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to Open smart thumbnail upload File :%s, error : [%s]!!!\n", __FILE__, __LINE__, uploadFname, strerror(errno));
+                ret = STH_ERROR;
+                pid_t pid = 0;
+                pid = getpid();
+                RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.CVRUPLOAD","%s(%d): Open failed sending sigterm to thread id : %d\n", __FUNCTION__, __LINE__,pid);
+                kill(pid, SIGTERM);
+                break;
             }
 
             data =(char*)malloc(fileLen*sizeof(char));
             if (NULL == data) {
             	RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to allocate memory :%s !!!\n", __FILE__, __LINE__, uploadFname);
-            	close(fd);
-		ret = STH_ERROR;
+                if (fd >= 0) {
+                    close(fd);
+                }
+                ret = STH_ERROR;
 	    	break;
             }
 
@@ -1372,7 +1378,9 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
             free(data);
             data = NULL;
         }
-        close(fd);
+        if (fd >= 0) {
+            close(fd);
+        }
         RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Removing smart thumbnail upload file: %s\n",__FILE__, __LINE__, uploadFname);
 	unlink (uploadFname);
 #endif
