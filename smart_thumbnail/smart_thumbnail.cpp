@@ -369,6 +369,7 @@ STH_STATUS SmartThumbnail::saveSTN()
     char fPath [64] = {0};
     //cv::Mat resizedCroppedObject;
     cv::Mat resizedRGBMat;
+    bool debugBlob = false;
 #ifdef USE_FILE_UPLOAD
     struct tm* tv = NULL;
     struct timespec currTime;
@@ -389,13 +390,27 @@ STH_STATUS SmartThumbnail::saveSTN()
 	    unionBox.y = ofData.boundingBoxYOrd;
 	    unionBox.width = ofData.boundingBoxWidth;
 	    unionBox.height = ofData.boundingBoxHeight;
-
+            CvFileStorage* fs = cvOpenFileStorage("/tmp/BlobTracking.xml", 0, CV_STORAGE_READ);
+            if(fs) {
+               debugBlob = cvReadIntByName(fs, 0, "debugBlob", false);
+               if(debugBlob)
+                  RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Enabled debugBlob\n", __FILE__, __LINE__);
+            } else {
+                  RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to read BlobTracking.xml\n", __FILE__, __LINE__);
+            }
+        
 	    // extracted the below logic from server scala code
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):unionBox.x %d unionBox.y %d unionBox.height %d unionBox.width %d hres_y_width=%d ,hres_y_height=%d\n", __FILE__, __LINE__, unionBox.x, unionBox.y, unionBox.height, unionBox.width,hres_y_width,hres_y_height);
 	    cv::Point2f orgCenter = getActualCentroid(unionBox);
 	    cv::Size cropSize = getCropSize(unionBox, sTnWidth, sTnHeight);
 	    cv::Point2f allignedCenter =  alignCentroid(orgCenter, lHresRGBMat, cropSize);
-	    getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
+            if(debugBlob) {
+                cropSize = {lHresRGBMat.cols, lHresRGBMat.rows};
+                getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
+                cropSize = getCropSize(unionBox, sTnWidth, sTnHeight);
+            } else {
+                getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
+            }
 	    relativeBBox = getRelativeBoundingBox(unionBox, cropSize, allignedCenter);
 
            //Update cropped SmartThumbnail Coordinates
@@ -403,7 +418,16 @@ STH_STATUS SmartThumbnail::saveSTN()
            smartThumbCoord.y = (allignedCenter.y - (cropSize.height / 2));
            smartThumbCoord.width = cropSize.width;
            smartThumbCoord.height = cropSize.height;
+           if(debugBlob) {
+               cv::rectangle(croppedObj, cv::Rect(unionBox.x, unionBox.y, unionBox.width, unionBox.height), cv::Scalar(0,0,255), 4);
+               cv::rectangle(croppedObj, cv::Rect(smartThumbCoord.x, smartThumbCoord.y, smartThumbCoord.width, smartThumbCoord.height), cv::Scalar(255,0,0), 4);
 
+               for(int32_t i=0; i< (UPPER_LIMIT_BLOB_BB-1); i++) {
+                   if(smartThInst->objectBoxs[i].boundingBoxXOrd != -1) {
+                       cv::rectangle(croppedObj, cv::Rect(smartThInst->objectBoxs[i].boundingBoxXOrd, smartThInst->objectBoxs[i].boundingBoxYOrd, smartThInst->objectBoxs[i].boundingBoxWidth, smartThInst->objectBoxs[i].boundingBoxHeight), cv::Scalar(0,255,0), 4);
+                   }
+               }
+           }
 #if 0
 	    // create cropped object
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):before cropping object frame.\n", __FILE__, __LINE__);
