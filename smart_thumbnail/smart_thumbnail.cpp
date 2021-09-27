@@ -1610,6 +1610,9 @@ void SmartThumbnail::uploadPayload()
     memset(&startTime, 0, sizeof(startTime));
     memset(&currTime, 0, sizeof(currTime));
 
+    //Resetting upload retry count
+    waitingInterval = 1;
+
     //clock the start time
     clock_gettime(CLOCK_REALTIME, &startTime);
     RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Uploading smart thumbnail!!! Time left %ld\n", __FILE__, __LINE__, STN_UPLOAD_TIME_INTERVAL);
