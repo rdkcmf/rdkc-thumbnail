@@ -616,6 +616,20 @@ STH_STATUS SmartThumbnail::createPayload()
 	    unionBox.width = smartThInst -> ofData.boundingBoxWidth;
 	    unionBox.height = smartThInst -> ofData.boundingBoxHeight;
 
+	    // update motion blob coordinates
+	    for(int32_t i=0; i<UPPER_LIMIT_BLOB_BB; i++) {
+
+	        /*if(smartThInst -> objectBoxs[i].boundingBoxXOrd == INVALID_BBOX_ORD) {
+	            break;
+	        }*/
+	        payload.objectBoxs[i].boundingBoxXOrd = smartThInst->objectBoxs[i].boundingBoxXOrd;
+	        payload.objectBoxs[i].boundingBoxYOrd = smartThInst->objectBoxs[i].boundingBoxYOrd;
+	        payload.objectBoxs[i].boundingBoxWidth = smartThInst->objectBoxs[i].boundingBoxWidth;
+	        payload.objectBoxs[i].boundingBoxHeight = smartThInst->objectBoxs[i].boundingBoxHeight;
+	    }
+
+	    payload.tsDelta = ofData.tsDelta;
+
 	    // extracted the below logic from server scala code
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):unionBox.x %d unionBox.y %d unionBox.height %d unionBox.width %d\n", __FILE__, __LINE__, unionBox.x, unionBox.y, unionBox.height, unionBox.width);
             /* ScaleFactor for downsizing the frame before cropping the thumbnail. If the
@@ -636,6 +650,12 @@ STH_STATUS SmartThumbnail::createPayload()
 	    cv::Point2f allignedCenter =  alignCentroid(orgCenter, lHresRGBMat, cropSize);
 	    getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
 	    relativeBBox = getRelativeBoundingBox(unionBox, cropSize, allignedCenter);
+
+	    // update union box co-ordinate
+	    payload.unionBox.boundingBoxXOrd = relativeBBox.x;
+	    payload.unionBox.boundingBoxYOrd = relativeBBox.y;
+	    payload.unionBox.boundingBoxWidth = relativeBBox.width;
+	    payload.unionBox.boundingBoxHeight = relativeBBox.height;
 
            //Update cropped SmartThumbnail Coordinates
            smartThumbCoord.x = (allignedCenter.x - (cropSize.width / 2));
@@ -1265,6 +1285,7 @@ if(smartThInst->testHarnessOnFileFeed) {
     lock.unlock();
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): hResframePTS:%llu\n", __FUNCTION__, __LINE__, hResFramePTS);
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Time gap (hResFramePTS - lResframePTS):%llu\n", __FUNCTION__, __LINE__, (hResFramePTS - lResFramePTS));
+    smartThInst -> tsDelta = (hResFramePTS - lResFramePTS);
 #ifdef ENABLE_TEST_HARNESS
     }
 
@@ -1398,7 +1419,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
             updateObjFrameData(sm.unionBox.boundingBoxXOrd, sm.unionBox.boundingBoxYOrd, sm.unionBox.boundingBoxWidth, sm.unionBox.boundingBoxHeight, curr_time);
 
             memset(smartThInst->objectBoxs, INVALID_BBOX_ORD, sizeof(smartThInst->objectBoxs));
-            for(int32_t i=0; i<MAX_BLOB_SIZE; i++) {
+            for(int32_t i=0; i<UPPER_LIMIT_BLOB_BB; i++) {
 
                 if(sm.objectBoxs[i].boundingBoxXOrd == INVALID_BBOX_ORD) {
                     break;
@@ -1490,6 +1511,7 @@ void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t bounding
     smartThInst -> ofData.boundingBoxWidth = boundingBoxWidth;
     smartThInst -> ofData.boundingBoxHeight = boundingBoxHeight;
     smartThInst -> ofData.currTime = currTime;
+    smartThInst -> ofData.tsDelta = smartThInst -> tsDelta;
 
 #ifdef ENABLE_TEST_HARNESS
     if(smartThInst -> testHarnessOnFileFeed) {
@@ -1609,6 +1631,7 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
     char packHead[STN_UPLOAD_SEND_LEN+1];
     int retry = 0;
     char sTnTStamp[256]={0};
+    char deltaTS[256] = {0};
     time_t stnTS = (time_t)(smartThInst->payload.tstamp);
     struct timespec currTime;
     struct timespec startTime;
@@ -1619,6 +1642,7 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
     clock_gettime(CLOCK_REALTIME, &startTime);
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Uploading smart thumbnail!!! Time left %ld\n", __FILE__, __LINE__, timeLeft);
     stringifyEventDateTime(sTnTStamp, sizeof(sTnTStamp), smartThInst->payload.tstamp);
+    snprintf(deltaTS, sizeof(deltaTS), "%llu", smartThInst->payload.tsDelta);
 
     while (true) {
 	//clock the current time
@@ -1701,6 +1725,10 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
         memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "%s", sTnTStamp);
         httpClient->addHeader( "X-EVENT-DATETIME", packHead);
+
+        memset(packHead, 0, sizeof(packHead));
+        smartThInst->httpClient->addHeader( "X-TimeStamp-Delta", deltaTS);
+
 #ifdef _HAS_DING_	
 	if(payload.dingtstamp)
         {
@@ -1714,7 +1742,7 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
 #endif
         memset(packHead, 0, sizeof(packHead));
         //SMTN's Bounding box of Motion Detection area
-        snprintf(packHead, sizeof(packHead), "%d, %d, %d, %d", relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height);
+        snprintf(packHead, sizeof(packHead), "%d, %d, %d, %d", payload.unionBox.boundingBoxXOrd, payload.unionBox.boundingBoxYOrd, payload.unionBox.boundingBoxWidth, payload.unionBox.boundingBoxHeight);
         smartThInst->httpClient->addHeader( "X-BoundingBox", packHead);
 
         memset(packHead, 0, sizeof(packHead));
@@ -1722,11 +1750,11 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
         //SMTN's objectBoxs of Motion Detction area
         for(int32_t i =0; i< UPPER_LIMIT_BLOB_BB; i++)
         {
-            if((smartThInst->objectBoxs[i].boundingBoxXOrd) == INVALID_BBOX_ORD)
+            if((payload.objectBoxs[i].boundingBoxXOrd) == INVALID_BBOX_ORD)
                 break;
 
             memset(objectBoxsBuf, 0 , sizeof(objectBoxsBuf));
-            snprintf(objectBoxsBuf, sizeof(objectBoxsBuf), "(%d, %d, %d, %d)," , smartThInst ->objectBoxs[i].boundingBoxXOrd, smartThInst ->objectBoxs[i].boundingBoxYOrd , smartThInst ->objectBoxs[i].boundingBoxWidth, smartThInst ->objectBoxs[i].boundingBoxHeight );
+            snprintf(objectBoxsBuf, sizeof(objectBoxsBuf), "(%d, %d, %d, %d)," , payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd , payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight );
             strcat(packHead, objectBoxsBuf);
         }
 
@@ -1798,7 +1826,7 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
 
         if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
             clock_gettime(CLOCK_REALTIME, &currTime);
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-EVENT-DATETIME: %s X-BoundingBox: %d %d %d %d  X-VIDEO-RECORDING :OFF  X-BoundingBoxes: %s\n", __FUNCTION__, __LINE__, sTnTStamp, relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height, objectBoxsBuf);
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-TimeStamp-Delta: %s X-EVENT-DATETIME: %s X-BoundingBox: %d %d %d %d  X-VIDEO-RECORDING :OFF  X-BoundingBoxes: %s\n", __FUNCTION__, __LINE__, deltaTS, sTnTStamp, payload.unionBox.boundingBoxXOrd, payload.unionBox.boundingBoxYOrd, payload.unionBox.boundingBoxWidth, payload.unionBox.boundingBoxHeight, objectBoxsBuf);
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): StnTimestamp,CurrentTimestamp,Latency:%ld,%ld,%ld\n",__FUNCTION__,__LINE__, stnTS, currTime.tv_sec, (currTime.tv_sec-stnTS));
             break;
 

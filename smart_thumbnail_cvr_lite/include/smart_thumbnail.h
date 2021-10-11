@@ -166,6 +166,14 @@ typedef enum {
     STH_NO_PAYLOAD
 }STH_STATUS;
 
+typedef struct _tBoundingBox
+{
+    int32_t boundingBoxXOrd;
+    int32_t boundingBoxYOrd;
+    int32_t boundingBoxWidth;
+    int32_t boundingBoxHeight;
+}BoundingBox;
+
 typedef struct {
     uint64_t tstamp;
 #ifdef _HAS_DING_
@@ -176,6 +184,9 @@ typedef struct {
     uint64_t motionTime;
     bool deliveryDetected;
 #endif
+    BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
+    BoundingBox unionBox;
+    uint64_t tsDelta;
 }STHPayload;
 
 typedef struct {
@@ -185,15 +196,8 @@ typedef struct {
     uint32_t boundingBoxHeight;
     cv::Mat  maxBboxObjYUVFrame;
     uint64_t currTime;
+    uint64_t tsDelta;
 }objFrameData;
-
-typedef struct _tBoundingBox
-{
-    int32_t boundingBoxXOrd;
-    int32_t boundingBoxYOrd;
-    int32_t boundingBoxWidth;
-    int32_t boundingBoxHeight;
-}BoundingBox;
 
 class SmartThumbnail
 {
@@ -345,6 +349,7 @@ class SmartThumbnail
 
 	uint64_t prev_time;
 	int32_t event_quiet_time;
+        uint64_t tsDelta;
 	char smtTnUploadURL[CONFIG_STRING_MAX];
 	char smtTnAuthCode[AUTH_TOKEN_MAX];
 	char modelName[CONFIG_STRING_MAX];

@@ -185,6 +185,14 @@ typedef enum {
     CVR_UPLOAD_CURL_ERR
 }CVR_UPLOAD_STATUS;
 
+typedef struct _tBoundingBox
+{
+    int32_t boundingBoxXOrd;
+    int32_t boundingBoxYOrd;
+    int32_t boundingBoxWidth;
+    int32_t boundingBoxHeight;
+}BoundingBox;
+
 typedef struct {
     char fname[64];
     uint64_t tstamp;
@@ -196,6 +204,9 @@ typedef struct {
     uint64_t motionTime;
     bool deliveryDetected;
 #endif
+    BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
+    BoundingBox unionBox;
+    uint64_t tsDelta;
 }STHPayload;
 
 typedef struct {
@@ -204,16 +215,9 @@ typedef struct {
     uint32_t boundingBoxWidth;
     uint32_t boundingBoxHeight;
     uint64_t currTime;
+    uint64_t tsDelta;
     cv::Mat  maxBboxObjYUVFrame;
 }objFrameData;
-
-typedef struct _tBoundingBox
-{
-    int32_t boundingBoxXOrd;
-    int32_t boundingBoxYOrd;
-    int32_t boundingBoxWidth;
-    int32_t boundingBoxHeight;
-}BoundingBox;
 
 class SmartThumbnail
 {
@@ -379,6 +383,7 @@ class SmartThumbnail
 	STHPayload payload;
 	uint64_t motion_time;
 	int32_t event_quiet_time;
+	uint64_t tsDelta;
 
 	char smtTnUploadURL[CONFIG_STRING_MAX];
 	char smtTnAuthCode[AUTH_TOKEN_MAX];
@@ -397,6 +402,7 @@ class SmartThumbnail
         BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
         time_t stnUploadTime;
         time_t eventquietTimeStart;
+        bool debugBlob;
 };
 
 struct SmarttnMetadata_thumb
