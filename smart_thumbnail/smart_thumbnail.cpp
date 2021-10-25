@@ -1017,6 +1017,9 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
                 RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr time %ld prev motion upload time %ld\n", __FILE__, __LINE__, currTime.tv_sec, smartThInst->stnUploadTime);
 	    } else {
                 ignoreMotion = false;
+#ifndef _OBJ_DETECTION_
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->motionLog);
+#endif
             }
             //save smart thumbnail from memory to file
             if( false == ignoreMotion )
