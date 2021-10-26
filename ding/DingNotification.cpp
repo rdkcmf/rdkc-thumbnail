@@ -38,6 +38,7 @@ int DingNotification::waitInterval = 1 ;
 DingNotification::DingNotification():
 				m_httpClient(NULL),
 				m_uploadReady(false),
+                                m_DingTNuploadStatus(false),
 				m_dingTime(0),
 				m_quiteTime(DEFAULT_QUITE_TIME),
 				m_dnsCacheTimeout(DEFAULT_DNS_CACHE_TIMEOUT),
@@ -88,7 +89,6 @@ DingNotification *DingNotification::getInstance()
     return m_Instance;
 }
 
-
 void DingNotification::init(char* modelName,char* mac,char* firmware)
 {
    snprintf(m_macAddress, sizeof(m_macAddress), "%s",mac);	
@@ -96,13 +96,11 @@ void DingNotification::init(char* modelName,char* mac,char* firmware)
    snprintf(m_firmwareName, sizeof(m_firmwareName), "%s",firmware);	
    m_httpClient = new HttpClient(); 
    //Initialize upload routine
-   RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Creating smart thumbnail upload thread.\n", __FUNCTION__, __LINE__);
+   RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Creating Ding Notification upload thread.\n", __FUNCTION__, __LINE__);
    std::thread uploadDingNotifThread(monitorDingNotification);
    uploadDingNotifThread.detach();
-
-   
-
 }
+
 bool DingNotification::waitForDing()
 {
     bool status = false;
@@ -123,6 +121,7 @@ bool DingNotification::waitForDing()
     }
     return status;
 }
+
 bool DingNotification::signalDing(bool status,uint64_t currTime)
 {
     m_dingTime = currTime;
@@ -216,6 +215,7 @@ int DingNotification::getTnUploadConf()
 
     return RDKC_SUCCESS;
 }
+
 bool  DingNotification::monitorDingNotification()
 {
    while (!m_termFlag)
@@ -359,30 +359,30 @@ void DingNotification::sendDingNotification()
     if (NULL != m_Instance->m_httpClient) {
          m_Instance->m_httpClient->close();
     }
-    m_Instance->uploadSnapShot();
 }
 
-void  DingNotification::captureSnapShot()
-{
-  int ret = 0;
 
-  if(RDKC_SUCCESS != getTnUploadConf())
-  {
+void  DingNotification::uploadDingThumbnail() {
+   if(RDKC_SUCCESS != getTnUploadConf())
+   {
 	RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): Failed to read the configuration\n",__FUNCTION__,__LINE__);
 	return;
-  }
+   }
 
-  ret = v_secure_system("rdkc_snapshooter %s %d %d %d",SNAPSHOT_FILE,COMPRESSION_SCALE,m_snapShotWidth,m_snapShotHeight);
-  
-  if(-1 == ret)
-  {
-	RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): system call - snapshooter failed!\n", __FILE__, __LINE__);
-  }
-  return;
+   RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Creating Ding thumbnail upload thread.\n", __FUNCTION__, __LINE__);
+   std::thread uploadDingTNThread(uploadDingSnapShot);
+   uploadDingTNThread.detach();
 }
+
+void  DingNotification::uploadDingSnapShot()
+{
+   RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Triggering Ding thumbnail upload\n", __FUNCTION__, __LINE__);
+   m_Instance->uploadSnapShot();
+}
+
 void  DingNotification::uploadSnapShot()
 {
-  /* get file attribute */
+        /* get file attribute */
   	int file_fd = 0;
 	int file_len = 0;
   	int read_len = 0;
@@ -399,8 +399,7 @@ void  DingNotification::uploadSnapShot()
 	char packHead[UPLOAD_DATA_LEN+1];
 	char dingT[256]={0};
         int isCVREnabled = 0;
-	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Capturing snapShot\n",__FUNCTION__,__LINE__);
-	m_Instance->captureSnapShot();
+        m_DingTNuploadStatus = false;
 	
   	if (stat(SNAPSHOT_FILE, &file_stat) < 0)
   	{
@@ -421,7 +420,7 @@ void  DingNotification::uploadSnapShot()
   	data =(char*)malloc(file_len*sizeof(char));
   	if(NULL == data)
         {
-                RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Failed to allocate memory :%s !\n", __FILE__, __LINE__,SNAPSHOT_FILE);
+                RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): Failed to allocate memory :%s !\n", __FILE__, __LINE__,SNAPSHOT_FILE);
                 close(file_fd);
                 return;
         }
@@ -520,13 +519,13 @@ void  DingNotification::uploadSnapShot()
 	//log success/failure for telemetry
     	if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
 		 if (0 == uploadRetryCount ) {
-				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d):High resolution thumbnail upload corresponding to ding is successful with header X-EVENT-DATETIME: %s uploadDuration =%ld\n",__FUNCTION__,__LINE__,dingT,uploadDuration);
+				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d):Thumbnail upload corresponding to ding is successful with header X-EVENT-DATETIME: %s uploadDuration =%ld\n",__FUNCTION__,__LINE__,dingT,uploadDuration);
                 
                         } else {
-                                RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.BUTTONMGR","%s(%d): High resolution thumbnail upload corresponding to ding is successful after %d retries  with header X-EVENT-DATETIME: %s uploadDuration =%ld\n", __FILE__, __LINE__,uploadRetryCount,dingT,uploadDuration);
+                                RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to ding is successful after %d retries  with header X-EVENT-DATETIME: %s uploadDuration =%ld\n", __FILE__, __LINE__,uploadRetryCount,dingT,uploadDuration);
                         }
 	}else {
-            RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): High resolution thumbnail upload corresponding to Ding failed with response code %lu and curl code %d\n",__FUNCTION__,__LINE__, response_code, curlCode);
+            RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to Ding failed with response code %lu and curl code %d\n",__FUNCTION__,__LINE__, response_code, curlCode);
     	}
 
         if(NULL != data)
@@ -535,7 +534,7 @@ void  DingNotification::uploadSnapShot()
                 data = NULL;
         }
         close(file_fd);
- 	unlink(SNAPSHOT_FILE);
+        m_DingTNuploadStatus = true;
 
 	if (NULL != m_Instance->m_httpClient) {
                 m_Instance->m_httpClient->close();
