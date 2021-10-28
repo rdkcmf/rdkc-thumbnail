@@ -26,12 +26,11 @@ volatile bool SmartThumbnail::termFlag = false;
 volatile bool SmartThumbnail::tnUploadConfRefreshed = false;
 volatile bool SmartThumbnail::eventConfRefreshed = false;
 volatile bool SmartThumbnail::DOIEnabled = false;
-
-static volatile int kDOIBitmapWidth = 320;
-static volatile int kDOIBitmapHeight= 240;
+volatile int SmartThumbnail::kDOIBitmapWidth = 320;
+volatile int SmartThumbnail::kDOIBitmapHeight= 240;
+const int kDOIBitmapDefaultThreshold = 80;
 
 int SmartThumbnail::waitingInterval = 1 ;
-
 #ifdef _OBJ_DETECTION_
 #ifdef ENABLE_TEST_HARNESS
 void SmartThumbnail::waitForNextDetectionFrame()
@@ -287,7 +286,9 @@ SmartThumbnail::SmartThumbnail():
 #endif
 
 				debugBlob(false),
-				debugBlobOnFullFrame(false)
+				debugBlobOnFullFrame(false),
+                                doi_enable(0),
+                                doi_threshold(0)
 {
 	memset(uploadFname, 0, sizeof(uploadFname));
 	memset(smtTnUploadURL, 0, sizeof(smtTnUploadURL));
@@ -567,7 +568,52 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,i
 		RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to read BlobTracking.xml\n", __FILE__, __LINE__);
 	}
 
+        //read doi conf
+        if (0 == access(DOI_CONFIG_FILE, F_OK)) {
+            if(STH_SUCCESS == getDOIConf()) {
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): getDOIConf success!!\n", __FUNCTION__, __LINE__);
+                if( 1 == doi_enable ) {
+                    if( STH_SUCCESS == smartThInst->applyDOIthreshold(DEFAULT_DOI_BITMAP,doi_threshold) ) {
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): applyDOIthreshold success!!\n", __FUNCTION__, __LINE__);
+                    }
+                } else {
+                    smartThInst->DOIEnabled = false;
+                    smartThInst->DOIBitmap = cv::Mat();
+               }
+            }
+        }
+
 	return STH_SUCCESS;
+}
+
+/** @description: DOI mask
+ *  @param[in] void
+ *  @return: STH_SUCCESS on success, STH_ERROR otherwise
+ */
+STH_STATUS SmartThumbnail::applyDOIthreshold(const char* bitmappath, uint8_t threshold)
+{
+    //rely on volatile for mutex
+    std::unique_lock<std::mutex> lock(smartThInst->stnMutex);
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d applyDOIthreshold threshold : %d\n", __FUNCTION__, __LINE__, threshold);
+
+    //per spec, the bitmap is 320x240 greyscale, binary value 0 or 255
+    //bitmap="/opt/usr_config/doi.jpg";
+    smartThInst->DOIBitmap = cv::imread(bitmappath, cv::IMREAD_GRAYSCALE);
+    if (!smartThInst->DOIBitmap.empty()) {
+       cv::threshold(smartThInst->DOIBitmap, smartThInst->DOIBitmap, threshold, 255, cv::THRESH_BINARY);
+       RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d bitmappath:%s decode succ\n", __FUNCTION__, __LINE__, bitmappath);
+       cv::imwrite(DEFAULT_DOI_BITMAP_BINARY, smartThInst->DOIBitmap);
+       smartThInst->kDOIBitmapWidth = smartThInst->DOIBitmap.cols;
+       smartThInst->kDOIBitmapHeight= smartThInst->DOIBitmap.rows;
+       smartThInst->DOIEnabled = true;
+    } else {
+       RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.CVR","(%s):%d bitmappath:%s decode failed\n", __FUNCTION__, __LINE__, bitmappath);
+       smartThInst->DOIEnabled = false;
+       return STH_ERROR;
+    }
+
+    lock.unlock();
+    return STH_SUCCESS;
 }
 
 /** @description: Get thumbnail upload conf
@@ -679,6 +725,63 @@ STH_STATUS SmartThumbnail::getEventConf()
 	return STH_SUCCESS;
 }
 
+/** @description: Get DOI conf
+ *  @param[in] void
+ *  @return: STH_SUCCESS on success, STH_ERROR otherwise
+ */
+STH_STATUS SmartThumbnail::getDOIConf()
+{
+    bool retry = true;
+    doi_config_info_t *doiCfg = NULL;
+
+    // Read DOI config.
+    doiCfg = (doi_config_info_t*) malloc(sizeof(doi_config_info_t));
+
+    if (NULL == doiCfg) {
+        RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error allocating memory.\n", __FILE__, __LINE__);
+        return STH_ERROR;
+    }
+
+    if (STH_SUCCESS != polling_config_init()) {
+        RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error initializing polling config.\n", __FILE__, __LINE__);
+        if (doiCfg) {
+            free(doiCfg);
+        }
+        return STH_ERROR;
+    }
+
+    while (retry) {
+        if (STH_SUCCESS != readDOIConfig(doiCfg)) {
+            RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error reading DOI Config.\n", __FILE__, __LINE__);
+        } else {
+            break;
+        }
+	//Sleep 10 sec before retrying
+	sleep(10);
+    }
+
+    // get doi enable flag
+    if (strlen(doiCfg->enable) > 0) {
+	doi_enable = atoi(doiCfg->enable);
+        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): getDOIConf doi_enable : %d \n", __FUNCTION__,  __LINE__,doi_enable);
+    }
+
+    // get doi threshold
+    if (strlen(doiCfg->threshold) > 0) {
+	doi_threshold = atoi(doiCfg->threshold);
+        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): getDOIConf doi_threshold: %d\n", __FUNCTION__,  __LINE__,doi_threshold);
+    }
+
+    if (doiCfg) {
+        free(doiCfg);
+        doiCfg = NULL;
+    }
+
+    polling_config_exit();
+
+    return STH_SUCCESS;
+}
+
 /** @description: apply doi on smart thumbnail
  *  @param[in] : ofData: unionBox (relative to full frame)
  *  @param[in] : DOIBitmap: bitmap (320x180, with same aspect ratio of full frame) of DOI
@@ -686,42 +789,56 @@ STH_STATUS SmartThumbnail::getEventConf()
  */
 STH_STATUS SmartThumbnail::applyDOIonSTN(const objFrameData &ofData, const cv::Mat &DOIBitmap)
 {
-	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): currTime=%ld\n", __FILE__, __LINE__, ofData.currTime);
+    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): currTime=%ld\n", __FILE__, __LINE__, ofData.currTime);
 
-	STH_STATUS ret = STH_ERROR;
-	cv::Rect unionBox;
+    STH_STATUS ret = STH_ERROR;
+    cv::Rect unionBox;
+    BoundingBox doiobjectBox;
+    bool inDOI = false;
 
-	/*
-	* unionBox is in highres *e.g.1280x720) coords. scale it to
-	* bmp 320x240
-	*/
-	unionBox.x = (ofData.boundingBoxXOrd * kDOIBitmapWidth) / hres_y_width;
-	unionBox.y = (ofData.boundingBoxYOrd * kDOIBitmapHeight) / hres_y_height;
-	unionBox.width = (ofData.boundingBoxWidth * kDOIBitmapWidth) / hres_y_width;
-	unionBox.height = (ofData.boundingBoxHeight * kDOIBitmapHeight) / hres_y_height;
+    // update motion blob coordinates
+    for(int32_t i=0; i<UPPER_LIMIT_BLOB_BB; i++) {
+	memset (&doiobjectBox, 0, sizeof(doiobjectBox));
+	if((smartThInst->objectBoxs[i].boundingBoxXOrd) == INVALID_BBOX_ORD) {
+		continue;
+	}
+	doiobjectBox.boundingBoxXOrd = smartThInst->objectBoxs[i].boundingBoxXOrd;
+	doiobjectBox.boundingBoxYOrd = smartThInst->objectBoxs[i].boundingBoxYOrd;
+	doiobjectBox.boundingBoxWidth = smartThInst->objectBoxs[i].boundingBoxWidth;
+	doiobjectBox.boundingBoxHeight = smartThInst->objectBoxs[i].boundingBoxHeight;
 
-	int bottomLeftX = unionBox.x;
-	int bottomLeftY = unionBox.y + unionBox.height - 1;
-	int bottomRightX = bottomLeftX + unionBox.width - 1;
-	int bottomRightY = bottomLeftY;
-	int bottomLeft = DOIBitmap.at<uint8_t>(bottomLeftY, bottomLeftX);
-	int bottomRight= DOIBitmap.at<uint8_t>(bottomRightY, bottomRightX);
-	int inDOI = (bottomLeft == 255 && bottomRight == 255);
+	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):DOI Before rescaling : Motion Blob[%d] : %d, %d, %d, %d\n", __FILE__, __LINE__,i,doiobjectBox.boundingBoxXOrd, doiobjectBox.boundingBoxYOrd, doiobjectBox.boundingBoxWidth, doiobjectBox.boundingBoxHeight);
 
-	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL",
-	         "%s(%d):DOI unionBox.x %d unionBox.y %d unionBox.height %d unionBox.width %d hres_y_width=%d ,hres_y_height=%d"
-	         "bottomLeft(%d, %d)=%d, bottomRight*%d, %d)=%d, inDOI=%d\n",
-	         __FILE__, __LINE__,
-	         unionBox.x, unionBox.y,
-	         unionBox.height, unionBox.width,
-	         hres_y_width, hres_y_height,
-	         bottomLeftX, bottomLeftY, bottomLeft,
-	         bottomRightX, bottomRightY, bottomRight, inDOI);
+        doiobjectBox.boundingBoxXOrd = (doiobjectBox.boundingBoxXOrd * kDOIBitmapWidth) / hres_y_width;
+        doiobjectBox.boundingBoxYOrd = (doiobjectBox.boundingBoxYOrd * kDOIBitmapHeight) / hres_y_height;
+        doiobjectBox.boundingBoxWidth = (doiobjectBox.boundingBoxWidth * kDOIBitmapWidth) / hres_y_width;
+        doiobjectBox.boundingBoxHeight = (doiobjectBox.boundingBoxHeight * kDOIBitmapHeight) / hres_y_height;
 
-	// check union box against bitmap
-	ret = inDOI ? STH_SUCCESS : STH_ERROR;
+        int bottomLeftX = doiobjectBox.boundingBoxXOrd;
+        int bottomLeftY = doiobjectBox.boundingBoxYOrd + doiobjectBox.boundingBoxHeight - 1;
+        int bottomRightX = doiobjectBox.boundingBoxXOrd + doiobjectBox.boundingBoxWidth - 1;
+        int bottomRightY = doiobjectBox.boundingBoxYOrd ;
 
-	return ret;
+        int bottomLeft = DOIBitmap.at<uint8_t>(bottomLeftY, bottomLeftX);
+        int bottomRight= DOIBitmap.at<uint8_t>(bottomRightY, bottomRightX);
+        inDOI = (bottomLeft == 255 && bottomRight == 255); 
+
+        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL",
+            "%s(%d):After rescaling : Motion Blob[%d] : %d, %d, %d, %d, hres_y_width=%d ,hres_y_height=%d, bottomLeft(%d, %d)=%d , bottomRight(%d, %d)=%d , inDOI=%d\n",__FILE__, __LINE__,i,
+            doiobjectBox.boundingBoxXOrd , doiobjectBox.boundingBoxYOrd ,
+            doiobjectBox.boundingBoxWidth , doiobjectBox.boundingBoxHeight ,
+            hres_y_width, hres_y_height,
+            bottomLeftX, bottomLeftY, bottomLeft,
+            bottomRightX, bottomRightY, bottomRight, inDOI);
+
+        // check union box against bitmap
+        if(inDOI) {
+	    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Motion inside DOI\n", __FILE__,__LINE__);
+            ret = STH_SUCCESS;
+            break;
+        }
+    }
+    return ret;
 }
 
 /** @description: saves smart thumbnail to file
@@ -736,8 +853,10 @@ STH_STATUS SmartThumbnail::saveSTN()
 	cv::Rect unionBox;
 	cv::Mat lHresRGBMat;
 	cv::Mat croppedObj;
+        cv::Mat doiObj;
 
-	char fPath [64] = {0};
+	char fPath [FILEPATH_LEN] = {0};
+        char maskPath [FILEPATH_LEN] = {0};
 	cv::Mat resizedRGBMat;
 
 #ifdef USE_FILE_UPLOAD
@@ -862,21 +981,47 @@ STH_STATUS SmartThumbnail::saveSTN()
 		if (smartThInst->debugBlob && !smartThInst->debugBlobOnFullFrame ) {
 			cv::rectangle(croppedObj, cv::Rect(relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height), cv::Scalar(0,0,255), 4);
 
+                        if(smartThInst->DOIEnabled) {
+				doiObj = smartThInst->DOIBitmap.clone();
+				snprintf(maskPath, sizeof(maskPath), "%s/mask_%s", STN_PATH, currSTN.fname);
+			}
+
 			for(int32_t i=0; i< UPPER_LIMIT_BLOB_BB; i++) {
 				if(smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd != -1) {
 					cv::rectangle(croppedObj, cv::Rect(smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxYOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxWidth, smartThInst->currSTN.objectBoxs[i].boundingBoxHeight), cv::Scalar(0,255,0), 4);
+					if(smartThInst->DOIEnabled) {
+					 	cv::rectangle(doiObj, cv::Rect(smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxYOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxWidth, smartThInst->currSTN.objectBoxs[i].boundingBoxHeight), cv::Scalar(0,0,255), 4);
+					}
 				}
+			}
+			if(smartThInst->DOIEnabled) {
+                        	cv::imwrite(maskPath, doiObj);
+                        	doiObj.release();
 			}
 		}
 		// Debug Blobs on Full High Resolution Frame
 		else if (smartThInst->debugBlob && smartThInst->debugBlobOnFullFrame ) {
 			cv::rectangle(croppedObj, cv::Rect(ofData.boundingBoxXOrd, ofData.boundingBoxYOrd, ofData.boundingBoxWidth, ofData.boundingBoxHeight), cv::Scalar(0,0,255), 4);
+
+                        if(smartThInst->DOIEnabled) {
+				doiObj = smartThInst->DOIBitmap.clone();
+				snprintf(maskPath, sizeof(maskPath), "%s/mask_%s", STN_PATH, currSTN.fname);
+			}
+
 			cv::rectangle(croppedObj, cv::Rect(smartThumbCoord.x, smartThumbCoord.y, smartThumbCoord.width, smartThumbCoord.height), cv::Scalar(255,0,0), 4);
 
 			for(int32_t i=0; i< UPPER_LIMIT_BLOB_BB; i++) {
 				if(smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd != -1) {
-				cv::rectangle(croppedObj, cv::Rect(smartThInst->objectBoxs[i].boundingBoxXOrd, smartThInst->objectBoxs[i].boundingBoxYOrd, smartThInst->objectBoxs[i].boundingBoxWidth, smartThInst->objectBoxs[i].boundingBoxHeight), cv::Scalar(0,255,0), 4);
+					cv::rectangle(croppedObj, cv::Rect(smartThInst->objectBoxs[i].boundingBoxXOrd, smartThInst->objectBoxs[i].boundingBoxYOrd, smartThInst->objectBoxs[i].boundingBoxWidth, smartThInst->objectBoxs[i].boundingBoxHeight), cv::Scalar(0,255,0), 4);
+					if(smartThInst->DOIEnabled) {
+					    	cv::rectangle(doiObj, cv::Rect(smartThInst->objectBoxs[i].boundingBoxXOrd, smartThInst->objectBoxs[i].boundingBoxYOrd, smartThInst->objectBoxs[i].boundingBoxWidth, smartThInst->objectBoxs[i].boundingBoxHeight), cv::Scalar(0,0,255), 4);
+					}
 				}
+			}
+
+			if(smartThInst->DOIEnabled) {
+                        	cv::imwrite(maskPath, doiObj);
+                        	doiObj.release();
 			}
 		}
 		//cv::resize(croppedObj, resizedRGBMat,cv::Size(sTnWidth, sTnHeight));
@@ -887,7 +1032,6 @@ STH_STATUS SmartThumbnail::saveSTN()
 		//Write smart thumbnail to file.
 		imwrite(fPath, croppedObj);
 #endif
-
 		ret = STH_SUCCESS;
 	}
 
@@ -959,7 +1103,7 @@ STH_STATUS SmartThumbnail::checkSTN()
 			}
 
 			RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL", "%s(%d) checkSTN Erasing %s from the list\n", __FUNCTION__ , __LINE__,stnFname);
-      it = STNList.erase(it);
+                        it = STNList.erase(it);
 		}
 		else {
 			it++;
@@ -1552,81 +1696,41 @@ void SmartThumbnail::onMsgRefresh(rtMessageHeader const* hdr, uint8_t const* buf
  */
 void SmartThumbnail::onMsgDOIConfRefresh(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure)
 {
-	char const*  bitmapPath = "";
-	char const*  enabled = "false";
+    char const*  bitmapPath = "";
+    char const*  enabled = "false";
+    int kDOIBitmapThreshold = kDOIBitmapDefaultThreshold;
 
-	rtConnection con = (rtConnection) closure;
+    rtConnection con = (rtConnection) closure;
 
-	rtMessage req;
-	rtMessage_FromBytes(&req, buff, n);
+    rtMessage req;
+    rtMessage_FromBytes(&req, buff, n);
 
-	char* tempbuff = NULL;
-	uint32_t buff_length = 0;
+    char* tempbuff = NULL;
+    uint32_t buff_length = 0;
 
-	rtMessage_ToString(req, &tempbuff, &buff_length);
-	rtLog_Debug("Req : %.*s", buff_length, tempbuff);
-	free(tempbuff);
+    rtMessage_ToString(req, &tempbuff, &buff_length);
+    rtLog_Debug("Req : %.*s", buff_length, tempbuff);
+    free(tempbuff);
 
-	rtMessage_GetString(req, "config", &bitmapPath);
-	rtMessage_GetString(req, "enabled", &enabled);
+    rtMessage_GetString(req, "config", &bitmapPath);
+    rtMessage_GetString(req, "enabled", &enabled);
+    rtMessage_GetInt32(req,  "threshold", &kDOIBitmapThreshold);
 
-	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d bitmap:%s,enabled:%s\n", __FUNCTION__, __LINE__, bitmapPath, enabled);
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d bitmap:%s,enabled:%s,threshold=%d\n", __FUNCTION__, __LINE__, bitmapPath, enabled, kDOIBitmapThreshold);
 
-	//rely on volatile for mutex
-	std::unique_lock<std::mutex> lock(smartThInst->stnMutex);
-	if(!strcmp(enabled, "true")) {
-		//per spec, the bitmap is 320x240 greyscale, binary value 0 or 255
-		//bitmapPath="/opt/usr_config/doi.jpg";
-		const int kDOIBitmapThreshold = 80;
-#if 1
-		//use *.jpg or *.bmp
-		smartThInst->DOIBitmap = cv::imread(bitmapPath, cv::IMREAD_GRAYSCALE);
-		if (!smartThInst->DOIBitmap.empty()) {
-			cv::threshold(smartThInst->DOIBitmap, smartThInst->DOIBitmap, kDOIBitmapThreshold, 255, cv::THRESH_BINARY);
-			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d bitmap:%s decode succ\n", __FUNCTION__, __LINE__, bitmapPath);
-			kDOIBitmapWidth = smartThInst->DOIBitmap.cols;;
-			kDOIBitmapHeight= smartThInst->DOIBitmap.rows;
-			DOIEnabled = true;
-		}
-		else {
-			RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.CVR","(%s):%d bitmap:%s decode failed\n", __FUNCTION__, __LINE__, bitmapPath);
-			DOIEnabled = false;
-		}
-#else
-		//use raw bitmap
-		const int kDOIBitmapSize = kDOIBitmapWidth * kDOIBitmapHeight;
-		int fd = open(bitmapPath, O_RDONLY);
-		if (fd >= 0) {
-			smartThInst->DOIBitmap = cv::Mat(kDOIBitmapHeight, kDOIBitmapWidth, CV_8UC1);
-			int count = read(fd, smartThInst->DOIBitmap.data, kDOIBitmapSize);
-			if (count == kDOIBitmapSize) {
-				RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d bitmap:%s read succ\n", __FUNCTION__, __LINE__, bitmapPath);
-				kDOIBitmapWidth = smartThInst->DOIBitmap.cols;;
-				kDOIBitmapHeight= smartThInst->DOIBitmap.rows;
-				DOIEnabled = true;
-			}
-			else {
-				RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.CVR","(%s):%d bitmap:%s read failed (ret=%d)\n", __FUNCTION__, __LINE__, bitmapPath, count);
-				DOIEnabled = false;
-				smartThInst->DOIBitmap = cv::Mat();
-			}
-			close(fd);
-		}
-		else {
-			RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.CVR","(%s):%d bitmap:%s open failed (ret=%d)\n", __FUNCTION__, __LINE__, bitmapPath, fd);
-		}
-#endif
-	}
-	else {
-		DOIEnabled = false;
-		smartThInst->DOIBitmap = cv::Mat();
-	}
+    if(!strcmp(enabled, "true")) {
+        if( STH_SUCCESS == smartThInst->applyDOIthreshold(bitmapPath,kDOIBitmapThreshold) ) {
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): applyDOIthreshold success!!\n", __FUNCTION__, __LINE__);
+        }
+    } else {
+        smartThInst->DOIEnabled = false;
+        smartThInst->DOIBitmap = cv::Mat();
+    }
 
-	lock.unlock();
-	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d after conf refresh, DOIEnabled=%s, read bitmap:%s,width=%d, height=%d\n",
-	  __FUNCTION__, __LINE__, DOIEnabled ? "yes":"no", bitmapPath, smartThInst->DOIBitmap.cols, smartThInst->DOIBitmap.rows);
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.CVR","(%s):%d after conf refresh, DOIEnabled=%s, read bitmap:%s,width=%d, height=%d\n",
+        __FUNCTION__, __LINE__, DOIEnabled ? "yes":"no", bitmapPath, smartThInst->DOIBitmap.cols, smartThInst->DOIBitmap.rows);
 
-	rtMessage_Release(req);
+    rtMessage_Release(req);
 }
 
 void SmartThumbnail::OnClipGenStart(const char* cvrClipFname)
@@ -1707,12 +1811,15 @@ void SmartThumbnail::OnClipGenEnd(const char * cvrClipFname)
 					/* unionBox not in DOI, discard payload and set isPayloadAvailable to false */
 					smartThInst->ofData.maxBboxObjYUVFrame.release();
 					smartThInst->isPayloadAvailable = false;
+		                        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d ignoring motion outside DOI area \n", __FUNCTION__, __LINE__);
 				}
 			}
-			smartThInst->saveSTN();
-			smartThInst->addSTN();
-			smartThInst->checkSTN();
-			smartThInst->cvrClipGenStarted = false;
+                        if(smartThInst->isPayloadAvailable) {
+			     smartThInst->saveSTN();
+			     smartThInst->addSTN();
+			     smartThInst->checkSTN();
+			     smartThInst->cvrClipGenStarted = false;
+                        }
 		}
 	}
 #ifdef _OBJ_DETECTION_
@@ -1732,7 +1839,7 @@ void SmartThumbnail::OnClipGenEnd(const char * cvrClipFname)
 #endif
 
 	if(!smartThInst->isPayloadAvailable) {
-		RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d \t3. Smart Thumbnail is not available during current period.\n", __FUNCTION__, __LINE__);
+		RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d \t3. Smart Thumbnail is not available during current period.\n", __FUNCTION__, __LINE__);
 	}
 
 }

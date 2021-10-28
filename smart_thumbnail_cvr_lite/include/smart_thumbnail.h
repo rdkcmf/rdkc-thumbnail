@@ -215,6 +215,9 @@ class SmartThumbnail
         bool getUploadStatus();
         //set upload status
         STH_STATUS setUploadStatus(bool status);
+        //Check if STN falls on DOI
+        STH_STATUS applyDOIonSTN(const objFrameData& ofData, const cv::Mat &DOIBitmap);
+        STH_STATUS applyDOIonSTN();
 	//Pushes the data to the upload queue at the end of interval.
 	STH_STATUS createPayload();
         //Routine to upload STN Payload
@@ -272,10 +275,12 @@ class SmartThumbnail
         static void onMsgROIChanged(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	void printPolygonCoords(const char * str, std::vector<cv::Point>& polygon);
         void printROI();
+#endif
 #ifdef ENABLE_TEST_HARNESS
         static void onClipStatus(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 #endif
-#endif
+        //Process DOI config update
+        static void onMsgDOIConfRefresh(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 
 	//Updates object frame
 	static void  updateObjFrameData(int32_t boundingBoxXOrd,int32_t boundingBoxYOrd,int32_t boundingBoxWidth,int32_t boundingBoxHeight,uint64_t currTime);
@@ -311,6 +316,7 @@ class SmartThumbnail
 	cv::Size getCropSize(cv::Rect boundRect,double w,double h, double *rescaleSize);
 	cv::Rect getRelativeBoundingBox(cv::Rect boundRect, cv::Size cropSize, cv::Point2f allignedCenter);
 
+        static volatile bool DOIEnabled;
 	static SmartThumbnail* smartThInst;
 	int g_hres_buf_id;
    	bool hres_yuvDataMemoryAllocationDone;
@@ -413,6 +419,7 @@ class SmartThumbnail
 	cv::Rect smartThumbCoord;
         BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
         time_t eventquietTimeStart;
+        cv::Mat DOIBitmap;
 };
 
 struct SmarttnMetadata_thumb

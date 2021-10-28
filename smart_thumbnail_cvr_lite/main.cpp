@@ -266,6 +266,13 @@ int main(int argc, char** argv)
 			break;
 		}
 #endif		
+                //filter on DOI
+                status = smTnInstance->applyDOIonSTN();
+                if (STH_ERROR == status) {
+                    //isPayloadAvailable is now false, pass thru to createPayload for error handling.
+                    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart thumbnail is not in DOI, discard!!!\n", __FILE__, __LINE__);
+                }
+
 		//create payload
 		status = smTnInstance->createPayload();
 		if ( (STH_NO_PAYLOAD == status) ||

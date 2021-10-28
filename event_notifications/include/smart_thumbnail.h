@@ -84,68 +84,70 @@ extern "C" {
 #include "base64.h"
 #endif
 
-#define CACHE_SMARTTHUMBNAIL      															"/tmp/cache_smart_thumbnail.txt"
-#define FW_NAME_MAX_LENGTH              												512
-#define CONFIG_STRING_MAX               												(256)
-#define YUV_HRES_BUFFER_ID		          												0
-#define YUV_HRES_FRAME_WIDTH		        												1280
-#define YUV_HRES_FRAME_HEIGHT		        												720
+#define FILEPATH_LEN                    64
+#define CACHE_SMARTTHUMBNAIL      	"/tmp/cache_smart_thumbnail.txt"
+#define FW_NAME_MAX_LENGTH              512
+#define CONFIG_STRING_MAX               (256)
+#define YUV_HRES_BUFFER_ID		0
+#define YUV_HRES_FRAME_WIDTH		1280
+#define YUV_HRES_FRAME_HEIGHT		720
 
 #ifdef XCAM2
-#define STN_HRES_BUFFER_ID              												2
+#define STN_HRES_BUFFER_ID              2
 #elif defined(XHB1) || defined (XHC3)
-#define STN_HRES_BUFFER_ID              												2
-#define STN_MRES_BUFFER_ID              												1
+#define STN_HRES_BUFFER_ID              2
+#define STN_MRES_BUFFER_ID              1
 #else
-#define STN_HRES_BUFFER_ID              												0
+#define STN_HRES_BUFFER_ID              0
 #endif
 
 //actual width and height of smart thumbnail to be uploaded
-#define STN_FRAME_WIDTH 		            												212
-#define STN_FRAME_HEIGHT		            												119
+#define STN_FRAME_WIDTH 		212
+#define STN_FRAME_HEIGHT		119
 
-#define STN_DEFAULT_DNS_CACHE_TIMEOUT	  												60
+#define STN_DEFAULT_DNS_CACHE_TIMEOUT	60
 
 //default width and height of smart thumbnail
-#define STN_DEFAULT_WIDTH		            												640
-#define STN_DEFAULT_HEIGHT		          												480
+#define STN_DEFAULT_WIDTH		640
+#define STN_DEFAULT_HEIGHT		480
 
 #ifdef XHB1
-#define STN_HRES_CROP_WIDTH             												640
-#define STN_HRES_CROP_HEIGHT            												480
-#define STN_MRES_CROP_WIDTH             												400
-#define STN_MRES_CROP_HEIGHT            												300
+#define STN_HRES_CROP_WIDTH             640
+#define STN_HRES_CROP_HEIGHT            480
+#define STN_MRES_CROP_WIDTH             400
+#define STN_MRES_CROP_HEIGHT            300
 #endif
 
-#define STN_TIMESTAMP_TAG		            												"timestamp"
-#define STN_UPLOAD_TIME_INTERVAL	      												30
-#define STN_UPLOAD_THRESHOLD_INTERVAL	  												60
+#define STN_TIMESTAMP_TAG		"timestamp"
+#define STN_UPLOAD_TIME_INTERVAL	30
+#define STN_UPLOAD_THRESHOLD_INTERVAL   60
 
-#define STN_PATH 			                  												"/tmp"
-#define STN_UPLOAD_SEND_LEN		          												2048
-#define STN_COMPRESSION_SCALE		        												40
-#define STN_DATA_MAX_SIZE		            												1024*1024 	//1 MB
-#define STN_TSTAMP_SIZE			            												50
-#define STN_DEFAULT_EVT_QUIET_TIME	    												30
-#define STN_MAX_PAYLOAD_COUNT		        												4
+#define STN_PATH 			"/tmp"
+#define STN_UPLOAD_SEND_LEN		2048
+#define STN_COMPRESSION_SCALE		40
+#define STN_DATA_MAX_SIZE		1024*1024 //1 MB
+#define STN_TSTAMP_SIZE			50
+#define STN_DEFAULT_EVT_QUIET_TIME	30
+#define STN_MAX_PAYLOAD_COUNT		4
 
-#define STN_TRUE			                  												"true"
-#define STN_FALSE			                  												"false"
-
-#define RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC 												"RDKC.ENABLE_DYNAMIC_LOG"
+#define STN_TRUE                        "true"
+#define STN_FALSE                       "false"
+#define DEFAULT_DOI_BITMAP              "/opt/usr_config/doi_bitmap"
+#define DEFAULT_DOI_BITMAP_BINARY       "/opt/usr_config/doi_bitmap-binary.jpg"
+#define RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC "RDKC.ENABLE_DYNAMIC_LOG"
 
 #define STN_MAX( a, b ) ( ( a > b) ? a : b )
 #define STN_MIN( a, b ) ( ( a < b) ? a : b )
 
-#define UPPER_LIMIT_BLOB_BB             												5
-#define BLOB_BB_MAX_LEN                 												256
-#define INVALID_BBOX_ORD                												(-1)
+#define UPPER_LIMIT_BLOB_BB             5
+#define BLOB_BB_MAX_LEN                 256
+#define INVALID_BBOX_ORD                (-1)
 
 #ifdef ENABLE_TEST_HARNESS
-#define TEST_HARNESS_ON_FILE_ENABLED    												"Test_Harness_on_File_Enabled"
+#define TEST_HARNESS_ON_FILE_ENABLED    "Test_Harness_on_File_Enabled"
 #endif
 
-#define STN_UPLOAD_INTERVAL	                                    4
+#define STN_UPLOAD_INTERVAL	                                4
 
 #ifdef _OBJ_DETECTION_
 #define DEFAULT_INPUT_DEV                                       "/dev/video0"
@@ -302,6 +304,8 @@ private:
 	SmartThumbnail();
 	~SmartThumbnail();
 	STH_STATUS applyDOIonSTN(const objFrameData& ofData, const cv::Mat &DOIBitmap);
+	STH_STATUS getDOIConf();
+	STH_STATUS applyDOIthreshold(const char* bitmappath, uint8_t threshold);
 	STH_STATUS saveSTN();
 	STH_STATUS addSTN();
 	STH_STATUS checkSTN();
@@ -389,7 +393,8 @@ private:
 	static volatile bool tnUploadConfRefreshed;
 	static volatile bool eventConfRefreshed;
 	static volatile bool DOIEnabled;
-
+	static volatile int kDOIBitmapWidth;
+	static volatile int kDOIBitmapHeight;
 	static SmartThumbnail* smartThInst;
 
 #ifdef _HAS_XSTREAM_
@@ -501,6 +506,8 @@ private:
 	bool debugBlob;
 	bool debugBlobOnFullFrame;
 	cv::Mat DOIBitmap;
+        uint8_t doi_enable;
+        uint8_t doi_threshold;
 };
 
 #endif //__SMART_THUMBNAIL_H__

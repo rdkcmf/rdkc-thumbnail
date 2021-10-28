@@ -78,6 +78,7 @@ extern "C" {
 #include "base64.h"
 #endif
 
+#define FILEPATH_LEN                    64
 #define CACHE_SMARTTHUMBNAIL "/tmp/cache_smart_thumbnail.txt"
 
 #define FW_NAME_MAX_LENGTH 512
@@ -126,6 +127,8 @@ extern "C" {
 
 #define STN_TRUE			"true"
 #define STN_FALSE			"false"
+#define DEFAULT_DOI_BITMAP              "/opt/usr_config/doi_bitmap"
+#define DEFAULT_DOI_BITMAP_BINARY       "/opt/usr_config/doi_bitmap-binary.jpg"
 
 #define RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC   "RDKC.ENABLE_DYNAMIC_LOG"
 
@@ -258,9 +261,12 @@ class SmartThumbnail
     private:
 	SmartThumbnail();
 	~SmartThumbnail();
+	STH_STATUS applyDOIonSTN(const objFrameData& ofData, const cv::Mat &DOIBitmap);
+	STH_STATUS getDOIConf();
+	STH_STATUS applyDOIthreshold(const char* bitmappath, uint8_t threshold);
 	STH_STATUS saveSTN();
 	STH_STATUS addSTN();
-        STH_STATUS checkSTN();
+	STH_STATUS checkSTN();
 	STH_STATUS delSTN(char* uploadFname);
 	void printSTNList();
 	STH_STATUS createPayload(char* uploadFname);
@@ -314,7 +320,9 @@ class SmartThumbnail
         static volatile bool termFlag;
         static volatile bool tnUploadConfRefreshed;
         static volatile bool eventConfRefreshed;
-
+        static volatile bool DOIEnabled;
+	static volatile int kDOIBitmapWidth;
+	static volatile int kDOIBitmapHeight;
 	static SmartThumbnail* smartThInst;
 
 #ifdef _HAS_XSTREAM_
@@ -402,10 +410,8 @@ class SmartThumbnail
 	uint64_t motion_time;
 	int32_t event_quiet_time;
 	uint64_t tsDelta;
-
 	char smtTnUploadURL[CONFIG_STRING_MAX];
 	char smtTnAuthCode[AUTH_TOKEN_MAX];
-
 	int sTnHeight;
 	int sTnWidth;
         uint16_t buf_id;
@@ -422,6 +428,9 @@ class SmartThumbnail
         time_t eventquietTimeStart;
         bool debugBlob;
         bool debugBlobOnFullFrame;
+        cv::Mat DOIBitmap;
+        uint8_t doi_enable;
+        uint8_t doi_threshold;
 };
 
 struct SmarttnMetadata_thumb
