@@ -133,7 +133,6 @@ extern "C" {
 #define STN_MIN( a, b ) ( ( a < b) ? a : b )
 
 #define UPPER_LIMIT_BLOB_BB     5
-#define MAX_BLOB_SIZE           4
 #define BLOB_BB_MAX_LEN         256
 #define INVALID_BBOX_ORD        (-1)
 

@@ -1938,12 +1938,8 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 #endif
 	    }
             smartThInst -> updateObjFrameData(sm.unionBox.boundingBoxXOrd, sm.unionBox.boundingBoxYOrd, sm.unionBox.boundingBoxWidth, sm.unionBox.boundingBoxHeight, curr_time);
-            memset(smartThInst->objectBoxs, INVALID_BBOX_ORD, sizeof(smartThInst->objectBoxs));
             for(int32_t i=0; i<UPPER_LIMIT_BLOB_BB; i++) {
 
-                if(sm.objectBoxs[i].boundingBoxXOrd == INVALID_BBOX_ORD) {
-                    break;
-                }
                 smartThInst -> updateObjectBoxs(&(sm.objectBoxs[i]), i);
             }
 	    //lock.unlock();
@@ -2766,7 +2762,12 @@ SmarttnMetadata_thumb::SmarttnMetadata_thumb()
     event_type = 0;
     motionScore = 0;
     memset(&unionBox, 0, sizeof(unionBox));
-    memset(objectBoxs, INVALID_BBOX_ORD, sizeof(objectBoxs));
+    for( int i=0; i< UPPER_LIMIT_BLOB_BB; i++) {
+        objectBoxs[i].boundingBoxXOrd = INVALID_BBOX_ORD;
+        objectBoxs[i].boundingBoxYOrd = INVALID_BBOX_ORD;
+        objectBoxs[i].boundingBoxWidth = INVALID_BBOX_ORD;
+        objectBoxs[i].boundingBoxHeight = INVALID_BBOX_ORD;
+    }
     s_curr_time = NULL;
 }
 
