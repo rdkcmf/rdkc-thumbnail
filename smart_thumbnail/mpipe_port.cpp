@@ -1,3 +1,5 @@
+#ifdef _OBJ_DETECTION_
+
 #if 0
 #include <iostream>
 
@@ -220,3 +222,4 @@ void *__mpipe_thread_main__() {
   return NULL;
 }
 
+#endif /* _OBJ_DETECTION_ */

@@ -1,3 +1,5 @@
+#ifdef _OBJ_DETECTION_
+
 #include "smart_thumbnail.h"
 
 #define CROPPING_WIDTH 848
@@ -151,3 +153,4 @@ void *__mpipe_thread_main__() {
   return NULL;
 }
 
+#endif
