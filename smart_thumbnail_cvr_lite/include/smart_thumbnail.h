@@ -323,6 +323,7 @@ class SmartThumbnail
 #endif
         bool logMotionEvent;
         bool logROIMotionEvent;
+        char motionLog[CONFIG_STRING_MAX];
 	std::thread rtMessageReceive;
 	std::thread uploadThread;
 	bool rtmessageSTHThreadExit;
@@ -362,6 +363,7 @@ class SmartThumbnail
 	cv::Rect relativeBBox;
 	cv::Rect smartThumbCoord;
         BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
+        time_t eventquietTimeStart;
 };
 
 struct SmarttnMetadata_thumb
