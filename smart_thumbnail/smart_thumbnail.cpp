@@ -313,14 +313,6 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,i
     m_ding = DingNotification::getInstance();
     m_ding->init(modelName,macAddress,firmwareName);
 #endif
-#ifdef _HAS_XSTREAM_
-    //Create the consumer class object
-    consumer = new XStreamerConsumer;
-    if (!consumer){
-          RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error creating instance of xstreamerConsumer.\n", __FUNCTION__, __LINE__);
-		  return STH_ERROR;
-    }
-
     //initialize
 #ifdef XHB1
     buf_id = STN_MRES_BUFFER_ID;
@@ -331,6 +323,14 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,i
 #else
     buf_id = STN_HRES_BUFFER_ID;
 #endif
+
+#ifdef _HAS_XSTREAM_
+    //Create the consumer class object
+    consumer = new XStreamerConsumer;
+    if (!consumer){
+          RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error creating instance of xstreamerConsumer.\n", __FUNCTION__, __LINE__);
+		  return STH_ERROR;
+    }
 
 #ifdef _DIRECT_FRAME_READ_
     if(STH_SUCCESS != smartThInst->consumer->RAWInit((u16)buf_id)){
