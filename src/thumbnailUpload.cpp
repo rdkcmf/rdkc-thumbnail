@@ -940,10 +940,24 @@ void ThumbnailUpload::releaseResources()
 {
 	if(NULL != tn_upload_file_name)
 	{
-		RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Remove file [%s] from camera ram.\n", __FILE__, __LINE__, tn_upload_file_name);
-		unlink(tn_upload_file_name);               // Remove the file at the end
+#ifdef _HAS_DING_
+                if (thumbnailUpload ->m_dingNotif) {
+                    int retry = 0;
+                    while ( ( true != m_ding->getDingTNUploadStatus() ) && ( retry <= 5 ) ) {
+                        retry++;
+		        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Waiting for Ding thumbnail upload...\n", __FILE__, __LINE__, tn_upload_file_name);
+                        sleep(5);
+                    }
+		    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Remove Ding thumbnailfile [%s] from camera ram.\n", __FILE__, __LINE__, tn_upload_file_name);
+		    unlink(tn_upload_file_name);
+                    m_dingNotif = false;
+                } else
+#endif
+                {
+		    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Remove file [%s] from camera ram.\n", __FILE__, __LINE__, tn_upload_file_name);
+                    unlink(tn_upload_file_name);
+                }
 	}
-
 }
 
 /**
@@ -1030,6 +1044,12 @@ int ThumbnailUpload::uploadThumbnailImage()
 		releaseResources();
 		return ret;
 	}
+#ifdef _HAS_DING_
+        if(thumbnailUpload ->m_dingNotif) {
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Triggering Ding thumbnail upload\n", __FILE__, __LINE__);
+            m_ding->uploadDingThumbnail();
+        }
+#endif
 	file_len = file_stat.st_size;
 
 	/*Adding camera mac in the Server URL */
@@ -1087,7 +1107,7 @@ int ThumbnailUpload::uploadThumbnailImage()
             http_client->addHeader( "X-EVENT-TYPE", "ding");
             snprintf(pack_head, sizeof(pack_head), "%s", dTnTStamp);
             http_client->addHeader( "X-EVENT-DATETIME", pack_head);
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Ding: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStamp);
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Ding: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStamp);
 	}	
 #endif
 	/* Send file to server */
@@ -1101,9 +1121,8 @@ int ThumbnailUpload::uploadThumbnailImage()
 #ifdef _HAS_DING_
 		if(thumbnailUpload ->m_dingNotif)
 		{
-            		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Low resolution thumbnail upload corresponding to ding is successful with header X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStamp);
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to ding is successful with header X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStamp);
                 }
-          	m_dingNotif = false;
 #endif
 	}
 	else
@@ -1111,9 +1130,8 @@ int ThumbnailUpload::uploadThumbnailImage()
 #ifdef _HAS_DING_
 		if(thumbnailUpload ->m_dingNotif)
                 {
-                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Ligh resolution thumbnail upload corresponding to ding  is failed.\n",__FUNCTION__,__LINE__);
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to ding failed.\n",__FUNCTION__,__LINE__);
                 }
-          	m_dingNotif = false;
 #endif
 	}
 	releaseResources();

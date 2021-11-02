@@ -32,14 +32,14 @@
 #include "rdk_debug.h"
 #define DEFAULT_DNS_CACHE_TIMEOUT	60
 #define MAX_RETRY_COUNT			3
-#define UPLOAD_TIME_INTERVAL        30
-#define UPLOAD_DATA_LEN             2048
-#define FW_MAX_LENGTH 512
-#define DEFAULT_QUITE_TIME 4
-#define COMPRESSION_SCALE                               40
-#define WIDTH                                     848
-#define HEIGHT                                    480
-#define SNAPSHOT_FILE                                   "/opt/ding_snapshot.jpg"
+#define UPLOAD_TIME_INTERVAL            30
+#define UPLOAD_DATA_LEN                 2048
+#define FW_MAX_LENGTH                   512
+#define DEFAULT_QUITE_TIME              4
+#define COMPRESSION_SCALE               40
+#define WIDTH                           848
+#define HEIGHT                          480
+#define SNAPSHOT_FILE                   "/opt/tn_snapshot.jpg"
 
 class DingNotification
 {
@@ -50,13 +50,16 @@ class DingNotification
 		void init(char* mac,char* modelName,char* firmware);
 		bool waitForDing();
 		bool signalDing(bool status,uint64_t dingTime);
-		int getQuiteTime();
+                bool getDingTNUploadStatus() { return m_DingTNuploadStatus ; }
+		int  getQuiteTime();
+                void uploadDingThumbnail();
 	private:
 		static DingNotification* m_Instance;
 		static volatile bool m_termFlag;
                 static volatile bool m_confRefreshed;
                 static int waitInterval;
 		static bool monitorDingNotification();
+                static void uploadDingSnapShot();
 
  		HttpClient* m_httpClient;
 		std::mutex m_dingMutex;
@@ -70,6 +73,7 @@ class DingNotification
                 char m_macAddress[CONFIG_STRING_MAX];
                 char m_firmwareName[FW_MAX_LENGTH];
 		bool m_uploadReady;
+                bool m_DingTNuploadStatus;
 		int m_quiteTime;
 		int m_snapShotHeight;
 		int m_snapShotWidth;
@@ -78,7 +82,6 @@ class DingNotification
 		int getDingConf();
 		int getTnUploadConf();
 		void sendDingNotification();
-		void captureSnapShot();
 		void uploadSnapShot();
 		void stringifyDateTime(char* strEvtDateTime , size_t evtdatetimeSize, time_t evtDateTime);
 
