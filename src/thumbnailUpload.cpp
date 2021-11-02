@@ -1208,7 +1208,7 @@ void ThumbnailUpload::onDingNotification(rtMessageHeader const* hdr, uint8_t con
         memset (&currTime, 0, sizeof(struct timespec));
         clock_gettime(CLOCK_REALTIME, &currTime);
 
-        if((currTime.tv_sec - thumbnailUpload ->m_dingTime) > thumbnailUpload->m_ding->getQuiteTime())
+        if((currTime.tv_sec - thumbnailUpload ->m_dingTime) >= thumbnailUpload->m_ding->getQuiteTime())
         {
            thumbnailUpload ->m_dingTime = currTime.tv_sec;
            thumbnailUpload -> m_dingNotif = true;
