@@ -65,20 +65,48 @@ int32_t SmartThumbnail::event_quiet_time = STN_DEFAULT_EVT_QUIET_TIME;
 #ifdef _OBJ_DETECTION_
 #ifdef ENABLE_TEST_HARNESS
 
+void SmartThumbnail::onClipStatus(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure)
+{
+    int clipGenStatus = -1;
+
+    (void) closure;
+    rtMessage m;
+    rtMessage_FromBytes(&m, buff, n);
+    rtMessage_GetInt32(m, "clipStatus", &clipGenStatus);
+
+    if( clipGenStatus == 0) {
+        smartThInst->clipEnd = true;
+        smartThInst->detectionCv.notify_one();
+        sem_post(&(smartThInst->semSTNUpload));
+    }
+    rtMessage_Release(m);
+}
+
+void SmartThumbnail::waitForClipEnd()
+{
+    sem_wait(&semSTNUpload);
+}
+
 void SmartThumbnail::waitForNextDetectionFrame()
 {
     std::unique_lock<std::mutex> lock(hres_data_lock);
-    detectionCv.wait(lock, [this] {return ((currTstamp >= (detectionTstamp + 100))|| (detectionTstamp == 0));});
+    detectionCv.wait(lock, [this] {return (((lastProcessedFrame != FrameNum) && ((FrameNum - THFrameNum) % fps == 0))|| (detectionTstamp == 0) || (clipEnd));});
+    clipEnd = false;
     lock.unlock();
 }
 
-void SmartThumbnail::notifyXvision(const DetectionResult &result)
+void SmartThumbnail::notifyXvision(const DetectionResult &result, double motionTriggeredTime, int mpipeProcessedframes, double time_taken, double time_waited)
 {
     rtMessage m;
     rtMessage_Create(&m);
     rtMessage_SetInt32(m, "FileNum", THFileNum);
     rtMessage_SetInt32(m, "FrameNum", THFrameNum);
     rtMessage_SetDouble(m, "deliveryConfidence", result.deliveryScore);
+    rtMessage_SetInt32(m, "maxAugScore", result.maxAugScore);
+    rtMessage_SetDouble(m, "motionTriggeredTime", motionTriggeredTime);
+    rtMessage_SetInt32(m, "mpipeProcessedframes", mpipeProcessedframes);
+    rtMessage_SetDouble(m, "time_taken", time_taken);
+    rtMessage_SetDouble(m, "time_waited", time_waited);
 
     for(int i = 0; i < result.personBBoxes.size(); i++) {
         rtMessage personInfo;
@@ -120,17 +148,19 @@ void SmartThumbnail::onCompletedDeliveryDetection(const DetectionResult &result)
 
     double time_taken = 0, time_waited = 0;
 
+#ifndef ENABLE_TEST_HARNESS
     time_taken = (smartThInst->detectionEndTime.tv_sec - smartThInst->detectionStartTime.tv_sec) * 1e6;
     time_taken = (time_taken + (smartThInst->detectionEndTime.tv_usec - smartThInst->detectionStartTime.tv_usec)) * 1e-6;
     if((smartThInst->uploadTriggeredTime.tv_sec != 0) || (smartThInst->uploadTriggeredTime.tv_usec != 0)) {
         time_waited = (smartThInst->detectionEndTime.tv_sec - smartThInst->uploadTriggeredTime.tv_sec) * 1e6;
         time_waited = (time_waited + (smartThInst->detectionEndTime.tv_usec - smartThInst->uploadTriggeredTime.tv_usec)) * 1e-6;
     }
+#endif
     memset(&(smartThInst -> uploadTriggeredTime), 0, sizeof(smartThInst -> uploadTriggeredTime));
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection Stats:%0.2f,%d,%d,0,%d,%0.2lf,%0.2lf\n", __FUNCTION__, __LINE__, result.deliveryScore, result.maxAugScore, result.personScores.size(), mpipeProcessedframes, time_taken, time_waited);
 
 #ifdef ENABLE_TEST_HARNESS
-    smartThInst->notifyXvision(result);
+    smartThInst->notifyXvision(result, 0, mpipeProcessedframes, time_taken, time_waited);
 #endif
     smartThInst->updateUploadPayload(result);
 
@@ -216,6 +246,9 @@ SmartThumbnail::SmartThumbnail():dnsCacheTimeout(STN_DEFAULT_DNS_CACHE_TIMEOUT),
 				detectionCompleted(false),
 				mpipe_hres_yuvData(NULL),
                                 detectionInProgress(false),
+#ifdef ENABLE_TEST_HARNESS
+                                clipEnd(false),
+#endif
 #endif
 				event_quiet_time(STN_DEFAULT_EVT_QUIET_TIME),
                                 logMotionEvent(true),
@@ -291,6 +324,7 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled, bool isDetectionEna
     }
 
     testHarnessOnFileFeed = (strcmp(rdkc_envGet(TEST_HARNESS_ON_FILE_ENABLED), "true") == 0) ? true : false;
+    sem_init(&semSTNUpload, 0, 0);
 #endif
 
     if(STH_SUCCESS == getTnUploadConf()) {
@@ -1198,8 +1232,11 @@ void SmartThumbnail::onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const
     rtMessage_GetInt32(m, "processID", &processPID);
     rtMessage_GetString(m, "timestamp", &strFramePTS);
 #ifdef ENABLE_TEST_HARNESS
+    int fileNum = smartThInst -> FileNum;
     rtMessage_GetInt32(m, "fileNum", &(smartThInst -> FileNum));
     rtMessage_GetInt32(m, "frameNum", &(smartThInst -> FrameNum));
+    rtMessage_GetInt32(m, "fps", &(smartThInst -> fps));
+
 #endif
 
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d)  strFramePTS:%s \n", __FUNCTION__ , __LINE__, strFramePTS);
@@ -1215,7 +1252,7 @@ void SmartThumbnail::onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const
     std::string frame_filename;
     if(smartThInst->testHarnessOnFileFeed)/*strcmp(rdkc_envGet(TEST_HARNESS_ON_FILE_ENABLED), "true") == 0)*/ {
         //Read the frame from file
-        frame_filename = "/tmp/THFrame_" + std::to_string(lResFramePTS) + ".jpg";
+        frame_filename = "/tmp/THFrame_" + std::to_string(lResFramePTS) + ".bmp";
         RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Reading frame file : %s\n", __FUNCTION__ , __LINE__, frame_filename.c_str());
     }
 #endif
@@ -1422,13 +1459,16 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
     		    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) No detection is in progress. Starting new detection process.\n", __FUNCTION__ , __LINE__);
 	            smartThInst -> isPayloadAvailable = true;
                     smartThInst->mpipeProcessedframes = 0;
-                    mpipe_port_onMotionEvent(true);
 		    gettimeofday(&(smartThInst -> detectionStartTime), NULL);
 #ifdef ENABLE_TEST_HARNESS
                     smartThInst -> detectionTstamp = 0;
+                    smartThInst -> clipEnd = false;
+                    smartThInst -> lastProcessedFrame = 0;
+                    smartThInst->detectionCv.notify_one();
                     smartThInst -> THFileNum = smartThInst -> FileNum;
                     smartThInst -> THFrameNum = smartThInst -> FrameNum;
 #endif
+                    mpipe_port_onMotionEvent(true);
                     smartThInst -> detectionInProgress = true;
                 }
 #endif
@@ -1450,6 +1490,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
       RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Metadata discarded. %d %d %d %d %d\n",
         __FUNCTION__ , __LINE__, smartThInst->isHresFrameReady, sm.event_type, lBboxArea, smartThInst->maxBboxArea, isInsideROI);
     }
+
 
     rtMessage_Release(m);
 }
@@ -1587,6 +1628,9 @@ STH_STATUS SmartThumbnail::rtMsgInit()
 
     rtConnection_AddListener(smartThInst -> connectionRecv, "RDKC.SMARTTN.CAPTURE",onMsgCaptureFrame, NULL);
     rtConnection_AddListener(smartThInst -> connectionRecv, "RDKC.SMARTTN.METADATA",onMsgProcessFrame, NULL);
+#ifdef ENABLE_TEST_HARNESS
+    rtConnection_AddListener(smartThInst -> connectionRecv, "RDKC.TH.CLIP.STATUS", onClipStatus, NULL);
+#endif
 
     //Add listener for dynamic log topics
     rtConnection_AddListener(smartThInst -> connectionRecv, RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC, dynLogOnMessage, smartThInst -> connectionRecv);

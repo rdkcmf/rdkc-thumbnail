@@ -37,6 +37,8 @@ cv::Mat mpipe_port_getNextFrame() {
 
 #ifdef ENABLE_TEST_HARNESS
     smTnInstance -> waitForNextDetectionFrame();
+    if( smTnInstance -> lastProcessedFrame == smTnInstance -> FrameNum) return cv_frame;
+    smTnInstance -> lastProcessedFrame = smTnInstance -> FrameNum;
     cv_frame = cv::Mat(smTnInstance ->curr_frame.rows, smTnInstance ->curr_frame.cols, CV_8UC3);
     cv::cvtColor(smTnInstance ->curr_frame, cv_frame, cv::COLOR_BGR2RGB);
     smTnInstance -> detectionTstamp = smTnInstance -> currTstamp;
@@ -161,7 +163,11 @@ void loadDetectionConfig(DetectionConfig *config, char *configFile)
 
     config->input_video_path = DEFAULT_INPUT_DEV;
     config->delivery_detection_graph_path = DEFAULT_GRAPH_PATH;
+#ifdef ENABLE_TEST_HARNESS
+    config->frame_read_delay = "0";
+#else
     config->frame_read_delay = DEFAULT_FRAME_READ_DELAY;
+#endif
     config->max_num_frames_cached_for_delivery_detection = DEFAULT_MAX_FRAMES_CACHED_FOR_DELIVERY_DETECTION;
     config->delivery_detection_model_min_score_threshold = DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD;
     config->delivery_detection_min_score_threshold = DEFAULT_DELIVERY_DETECTION_MIN_SCORE_THRESHOLD;

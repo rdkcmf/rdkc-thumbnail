@@ -220,7 +220,8 @@ class SmartThumbnail
 	STH_STATUS destroy();
 #ifdef _OBJ_DETECTION_
 #ifdef ENABLE_TEST_HARNESS
-        void notifyXvision(const DetectionResult &result);
+        void notifyXvision(const DetectionResult &result, double motionTriggeredTime, int mpipeProcessedframes, double time_taken, double time_waited);
+        void waitForClipEnd();
 #endif
 	void onCompletedDeliveryDetection(const DetectionResult &result);
 	friend cv::Mat mpipe_port_getNextFrame();
@@ -244,6 +245,9 @@ class SmartThumbnail
 	static void onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	//Generate the RGB object detection frame.
 	static void onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+#ifdef ENABLE_TEST_HARNESS
+        static void onClipStatus(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+#endif
 
 	//Updates object frame
 	static void  updateObjFrameData(int32_t boundingBoxXOrd,int32_t boundingBoxYOrd,int32_t boundingBoxWidth,int32_t boundingBoxHeight,uint64_t currTime);
@@ -316,8 +320,10 @@ class SmartThumbnail
         uint64_t currTstamp, detectionTstamp;
 	std::condition_variable detectionCv;
 	std::mutex hres_data_lock;
-	int THFileNum, THFrameNum;
-	int FileNum = 0, FrameNum = 0;
+	int THFileNum, THFrameNum, lastProcessedFrame;
+	int FileNum = 0, FrameNum = 0, fps;
+        sem_t semSTNUpload;
+        bool clipEnd;
 #endif
 
 #endif

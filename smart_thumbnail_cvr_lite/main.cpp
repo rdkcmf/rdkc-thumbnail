@@ -169,7 +169,11 @@ int main(int argc, char** argv)
 		
         //Initially sleep for upload interval time, to allow smart thumbnail to be generated.
 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Putting the Smart Thumnail Upload to sleep for %d seconds.\n", __FILE__, __LINE__, STN_UPLOAD_TIME_INTERVAL);
+#ifdef ENABLE_TEST_HARNESS
+        smTnInstance -> waitForClipEnd();
+#else
         sleep(STN_UPLOAD_TIME_INTERVAL);
+#endif
 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail Upload is ready.\n", __FILE__, __LINE__);
 
 	while (true) {
@@ -205,7 +209,11 @@ int main(int argc, char** argv)
 				} else {
 					remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
 					RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
+#ifdef ENABLE_TEST_HARNESS
+                                        smTnInstance -> waitForClipEnd();
+#else
 					sleep (remainingTime);
+#endif
 					continue;
 				}
                 }
@@ -232,7 +240,11 @@ int main(int argc, char** argv)
 			//calculate the time needed to sleep for next interval.
 			remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
 			RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
+#ifdef ENABLE_TEST_HARNESS
+                        smTnInstance -> waitForClipEnd();
+#else
 			sleep (remainingTime);
+#endif
 		}
 	}
 

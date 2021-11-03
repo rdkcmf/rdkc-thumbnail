@@ -240,7 +240,7 @@ class SmartThumbnail
 	STH_STATUS receiveRtmessage();
 #ifdef _OBJ_DETECTION_
 #ifdef ENABLE_TEST_HARNESS
-	void notifyXvision(const DetectionResult &result);
+	void notifyXvision(const DetectionResult &result, double motionTriggeredTime, int mpipeProcessedframes, double time_taken, double time_waited);
 	void waitForNextDetectionFrame();
 #endif
 	STH_STATUS setDetectionStatus(bool status);
@@ -343,7 +343,7 @@ class SmartThumbnail
 	cv::Rect currentBbox;
         bool detectionCompleted;
 	json_t *detectionResult;
-	struct timeval detectionStartTime, detectionEndTime, uploadTriggeredTime, clipStartTime;
+        struct timeval detectionEndTime, uploadTriggeredTime;
         int mpipeProcessedframes;
         double motionTriggeredTime;
 	char currDetectionSTNFname[CONFIG_STRING_MAX];
@@ -356,8 +356,12 @@ class SmartThumbnail
 	uint64_t currTstamp, detectionTstamp;
 	std::condition_variable detectionCv;
 	std::mutex hres_data_lock;
-	int THFileNum, THFrameNum;
-	int FileNum = 0, FrameNum = 0;
+	int THFileNum, THFrameNum, lastProcessedFrame;
+	int FileNum = 0, FrameNum = 0, fps;
+	uint64_t detectionStartTime, clipStartTime;
+        bool clipEnd;
+#else
+	struct timeval detectionStartTime, clipStartTime;
 #endif
 #endif
 	std::condition_variable cv;
