@@ -317,14 +317,6 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled, bool isDetectionEna
     m_ding = DingNotification::getInstance();
     m_ding->init(modelName,macAddress,firmwareName);
 #endif
-#ifdef _HAS_XSTREAM_
-	//Create XStreamerConsumer instance
-	consumer = new XStreamerConsumer;
-	if (NULL == consumer){
-		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Failed to create consumer object. \n", __FUNCTION__ , __LINE__);
-		return STH_ERROR;
-	}
-
 	//Initialize
 #ifdef XHB1
     buf_id = STN_MRES_BUFFER_ID;
@@ -335,6 +327,14 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled, bool isDetectionEna
 #else
     buf_id = STN_HRES_BUFFER_ID;
 #endif
+
+#ifdef _HAS_XSTREAM_
+	//Create XStreamerConsumer instance
+	consumer = new XStreamerConsumer;
+	if (NULL == consumer){
+		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Failed to create consumer object. \n", __FUNCTION__ , __LINE__);
+		return STH_ERROR;
+	}
 
 #ifdef _DIRECT_FRAME_READ_
     ret = consumer->RAWInit((u16)buf_id);
