@@ -643,14 +643,19 @@ STH_STATUS SmartThumbnail::createPayload()
 
             double scaleFactor = 1;
 	    cv::Size cropSize = getCropSize(unionBox, sTnWidth, sTnHeight, &scaleFactor);
-            cv::Size rescaleSize = cv::Size(lHresRGBMat.cols/scaleFactor, lHresRGBMat.rows/scaleFactor);
-            //resize the frame to fit the union blob in the thumbnail
-            cv::resize(lHresRGBMat, lHresRGBMat, rescaleSize);
-            //Resize the union blob also accordingly
-            unionBox.width = unionBox.width/scaleFactor;
-            unionBox.height = unionBox.height/scaleFactor;
-            unionBox.x = unionBox.x/scaleFactor;
-            unionBox.y = unionBox.y/scaleFactor;
+            if(scaleFactor != 1) {
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Resizing scale for the thumbnail is %ld\n", __FILE__, __LINE__, scaleFactor);
+                cv::Size rescaleSize = cv::Size(lHresRGBMat.cols/scaleFactor, lHresRGBMat.rows/scaleFactor);
+                //resize the frame to fit the union blob in the thumbnail
+                cv::resize(lHresRGBMat, lHresRGBMat, rescaleSize);
+                //Resize the union blob also accordingly
+                unionBox.width = unionBox.width/scaleFactor;
+                unionBox.height = unionBox.height/scaleFactor;
+                unionBox.x = unionBox.x/scaleFactor;
+                unionBox.y = unionBox.y/scaleFactor;
+            } else {
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Not resizing the thumbnail\n", __FILE__, __LINE__);
+            }
 	    cv::Point2f orgCenter = getActualCentroid(unionBox);
 	    cv::Point2f allignedCenter =  alignCentroid(orgCenter, lHresRGBMat, cropSize);
 	    getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
