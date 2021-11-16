@@ -1188,6 +1188,8 @@ STH_STATUS SmartThumbnail::destroy()
     //Exit the rtmessage receive and upload thread.
     //rtmessageSTHThreadExit =  true;
     //uploadSTHThreadExit = true;
+    rtConnection_Destroy(connectionSend);
+    rtConnection_Destroy(connectionRecv);
 
 	STH_STATUS ret = STH_SUCCESS;
 
@@ -1757,7 +1759,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
     iss.clear();
 
 #ifdef _OBJ_DETECTION_
-    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Last Motion time stamp: %d\n", __FUNCTION__ , __LINE__, smartThInst->motion_time);
+    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Last Motion time stamp: %lu\n", __FUNCTION__ , __LINE__, smartThInst->motion_time);
     if(smartThInst->detectionEnabled && sm.event_type == 4) {
         smartThInst->currentBbox.x = sm.deliveryUnionBox.boundingBoxXOrd;
         smartThInst->currentBbox.y = sm.deliveryUnionBox.boundingBoxYOrd;

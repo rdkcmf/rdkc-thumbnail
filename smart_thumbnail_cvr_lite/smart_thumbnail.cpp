@@ -955,6 +955,8 @@ STH_STATUS SmartThumbnail::destroy()
 	//Exit the rtmessage receive and upload thread.
 	rtmessageSTHThreadExit =  true;
 	//uploadSTHThreadExit = true;
+        rtConnection_Destroy(connectionSend);
+        rtConnection_Destroy(connectionRecv);
 
 #ifdef _HAS_XSTREAM_
 #ifdef _DIRECT_FRAME_READ_
@@ -1212,7 +1214,7 @@ void SmartThumbnail::onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const
     }
 #endif
 
-    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):prev_time :%d\n", __FUNCTION__ , __LINE__, smartThInst -> prev_time);
+    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):prev_time :%ld\n", __FUNCTION__ , __LINE__, smartThInst -> prev_time);
 #ifdef _OBJ_DETECTION_
     if(!smartThInst -> detectionEnabled) {
 #endif
