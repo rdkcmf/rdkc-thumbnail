@@ -47,10 +47,6 @@ ifeq ($(XCAM_MODEL), SCHC2)
 USE_DEWARP = yes
 endif
 
-ifeq ($(ENABLE_DELIVERY_DETECTION), true)
-USE_MISC = yes
-endif
-
 ENABLE_DIRECT_FRAME_READ := true
 
 ifneq ($(ENABLE_XSTREAMER), true)
@@ -88,18 +84,6 @@ endif
 LIBS    += -L$(RDK_PROJECT_ROOT_PATH)/opensource/lib  -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs
 LIBS    += -Wl,-rpath-link=$(PROJ_ROOT)/vendor/img/fs/shadow_root/usr/lib
 CFLAGS += -DUSE_MFRLIB
-
-ifeq ($(ENABLE_DELIVERY_DETECTION), true)
-CFLAGS  += -D_OBJ_DETECTION_
-SRC += mpipe_port.cpp
-CFLAGS += -I$(BUILD_ROOT_DIR)/opensource/include
-LIBS += -L$(BUILD_ROOT_DIR)/opensource/lib -lbase64
-LIBS += -ldeliverydetector
-endif
-
-ifeq ($(ENABLE_TEST_HARNESS), true)
-CFLAGS += -DENABLE_TEST_HARNESS
-endif
 
 SRC += smart_thumbnail.cpp main.cpp
 OBJ = $(SRC:.cpp=.o)

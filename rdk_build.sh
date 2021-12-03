@@ -61,11 +61,6 @@ else
 . ${RDK_PROJECT_ROOT_PATH}/build/components/sdk/setenv2
 fi
 
-if [ "$XCAM_MODEL" == "XHB1" ]; then
-    echo "Enabling delivery detection by default for DBC"
-    export ENABLE_DELIVERY_DETECTION=true
-fi
-
 export PLATFORM_SDK=${RDK_TOOLCHAIN_PATH}
 export FSROOT=$RDK_FSROOT_PATH
 
@@ -138,26 +133,7 @@ function install()
    
     make install
 
-    if [ $ENABLE_DELIVERY_DETECTION == 'true' ]; then
-        cp -r ./motion_notification/pre_built/mediapipe ${RDK_SDROOT}/etc
-    fi
-
     echo "thumbnail Installation is done"
-}
-
-# This function enables delivery detection
-function setDeliveryDetection()
-{
-    echo "setDeliveryDetection - Enable delivery detection"
-    export ENABLE_DELIVERY_DETECTION=true
-}
-
-# This function enables TESTHARNESS
-function setTH()
-{
-    echo "setTH - Enable delivery detection and TestHarness"
-    export ENABLE_DELIVERY_DETECTION=true
-    export ENABLE_TEST_HARNESS=true
 }
 
 # This function disables XSTREAMER flag for Hydra
@@ -173,8 +149,6 @@ HIT=false
 for i in "$@"; do
     case $i in
         enableHydra)  HIT=true; setHydra ;;
-        enableDeliveryDetection)  HIT=true; setDeliveryDetection ;;
-        enableTH)  HIT=true; setTH ;;
         configure)  HIT=true; configure ;;
         clean)      HIT=true; clean ;;
         build)      HIT=true; build ;;
