@@ -108,7 +108,7 @@ extern SmartThumbnail *smTnInstance;
 
 void callback_func(const DetectionResult &result)
 {
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Got data result callback\n", __FUNCTION__, __LINE__);
+    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Got data result callback\n", __FUNCTION__, __LINE__);
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): No of persons detected : %d\n", __FUNCTION__, __LINE__, result.personScores.size());
     mpipe_port_onMotionEvent(false);
     smTnInstance->onCompletedDeliveryDetection(result);    
@@ -720,7 +720,8 @@ STH_STATUS SmartThumbnail::createPayload()
 	    ret = STH_NO_PAYLOAD;
         }
         // reset the motion ignore flag
-        ignoreMotion = false;
+      ignoreMotion = false;
+      smartThInst -> maxBboxArea = 0;
 #ifdef _HAS_DING_
 	if(smartThInst -> m_dingNotif )
 	{
@@ -1418,6 +1419,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 		    //To indicate payload will there to upload
                     smartThInst -> isPayloadAvailable = true;
                 } else if(!smartThInst -> detectionInProgress) {
+    		    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) No detection is in progress. Starting new detection process.\n", __FUNCTION__ , __LINE__);
 	            smartThInst -> isPayloadAvailable = true;
                     smartThInst->mpipeProcessedframes = 0;
                     mpipe_port_onMotionEvent(true);
@@ -1445,7 +1447,8 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 	}
 
     } else {
-    	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Metadata discarded .\n", __FUNCTION__ , __LINE__);
+      RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Metadata discarded. %d %d %d %d %d\n",
+        __FUNCTION__ , __LINE__, smartThInst->isHresFrameReady, sm.event_type, lBboxArea, smartThInst->maxBboxArea, isInsideROI);
     }
 
     rtMessage_Release(m);
@@ -1797,7 +1800,10 @@ int  SmartThumbnail::uploadPayload(time_t timeLeft)
         if(smartThInst -> detectionEnabled) {
             struct timeval start, end;
             gettimeofday(&start, NULL);
-	    smartThInst->getDeliveryDetectionStatus();
+            if( retry == 0) {
+            	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait for delivery detection completion!!!\n",__FUNCTION__,__LINE__);
+	        smartThInst->getDeliveryDetectionStatus();
+            }
 
             gettimeofday(&end, NULL);
             double time_taken;

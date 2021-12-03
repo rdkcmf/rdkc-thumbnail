@@ -104,7 +104,7 @@ static bool check_enabled_rfc_feature(char*  rfc_feature_fname, char* feature_na
 
 void callback_func(const DetectionResult &result)
 {
-    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Got data result callback\n", __FUNCTION__, __LINE__);
+    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Got data result callback\n", __FUNCTION__, __LINE__);
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): No of persons detected : %d\n", __FUNCTION__, __LINE__, result.personScores.size());
     mpipe_port_onMotionEvent(false);
     smTnInstance->onCompletedDeliveryDetection(result);    
@@ -1836,6 +1836,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 		    //To indicate payload will there to upload
                     smartThInst -> isPayloadAvailable = true;
                 } else if(!smartThInst -> detectionInProgress) {
+                    RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) No detection is in progress. Starting new detection process.\n", __FUNCTION__ , __LINE__);
                     smartThInst->setDetectionStatus(false);
                     gettimeofday(&(smartThInst -> detectionStartTime), NULL);
                     smartThInst -> motionTriggeredTime = smartThInst->detectionStartTime.tv_sec - smartThInst->clipStartTime.tv_sec;
@@ -1866,7 +1867,8 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 	//}
 
     } else {
-        RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Metadata discarded .\n", __FUNCTION__ , __LINE__);
+      RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Metadata discarded. %d %d %d %d %d\n",
+        __FUNCTION__ , __LINE__, smartThInst->isHresFrameReady, sm.event_type, lBboxArea, smartThInst->maxBboxArea, isInsideROI);
     }
 
     rtMessage_Release(m);
