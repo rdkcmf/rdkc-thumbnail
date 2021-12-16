@@ -407,6 +407,7 @@ class SmartThumbnail
         time_t stnUploadTime;
         time_t eventquietTimeStart;
         bool debugBlob;
+        bool debugBlobOnFullFrame;
 };
 
 struct SmarttnMetadata_thumb

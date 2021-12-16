@@ -678,7 +678,7 @@ STH_STATUS SmartThumbnail::createPayload()
             double scaleFactor = 1;
 	    cv::Size cropSize = getCropSize(unionBox, sTnWidth, sTnHeight, &scaleFactor);
             if(scaleFactor != 1) {
-                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Resizing scale for the thumbnail is %ld\n", __FILE__, __LINE__, scaleFactor);
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Resizing scale for the thumbnail is %lf\n", __FILE__, __LINE__, scaleFactor);
                 cv::Size rescaleSize = cv::Size(lHresRGBMat.cols/scaleFactor, lHresRGBMat.rows/scaleFactor);
                 //resize the frame to fit the union blob in the thumbnail
                 cv::resize(lHresRGBMat, lHresRGBMat, rescaleSize);
@@ -700,6 +700,32 @@ STH_STATUS SmartThumbnail::createPayload()
 	    payload.unionBox.boundingBoxYOrd = relativeBBox.y;
 	    payload.unionBox.boundingBoxWidth = relativeBBox.width;
 	    payload.unionBox.boundingBoxHeight = relativeBBox.height;
+
+            for(int32_t i=0; i< UPPER_LIMIT_BLOB_BB; i++) {
+                if(payload.objectBoxs[i].boundingBoxXOrd != -1) {
+                    cv::Rect motionBlob, rescaledBlob;
+
+                    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Before rescaling : Motion Blob[%d] : %d, %d, %d, %d\n", __FILE__, __LINE__,i, payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd, payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight);
+
+                    //Resize motion blob according to the scaleFactor
+                    payload.objectBoxs[i].boundingBoxXOrd /= scaleFactor;
+                    payload.objectBoxs[i].boundingBoxYOrd /= scaleFactor;
+                    payload.objectBoxs[i].boundingBoxWidth /= scaleFactor;
+                    payload.objectBoxs[i].boundingBoxHeight /= scaleFactor;
+
+                    motionBlob = cv::Rect(payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd, payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight);
+
+                    //Align the motion blob coordinates to the cropped image size
+                    rescaledBlob = getRelativeBoundingBox(motionBlob, cropSize, allignedCenter);
+
+                    payload.objectBoxs[i].boundingBoxXOrd = rescaledBlob.x;
+                    payload.objectBoxs[i].boundingBoxYOrd = rescaledBlob.y;
+                    payload.objectBoxs[i].boundingBoxWidth = rescaledBlob.width;
+                    payload.objectBoxs[i].boundingBoxHeight = rescaledBlob.height;
+
+                    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):After rescaling : Motion Blob[%d] : %d, %d, %d, %d\n", __FILE__, __LINE__,i, payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd, payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight);
+                }
+            }
 
            //Update cropped SmartThumbnail Coordinates
            smartThumbCoord.x = (allignedCenter.x - (cropSize.width / 2));

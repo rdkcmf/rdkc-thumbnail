@@ -192,7 +192,8 @@ SmartThumbnail::SmartThumbnail():
 				mpipe_hres_yuvData(NULL),
 				detectionInProgress(false),
 #endif
-                                debugBlob(false)
+        debugBlob(false),
+        debugBlobOnFullFrame(false)
 {
     memset(uploadFname, 0, sizeof(uploadFname));
     memset(smtTnUploadURL, 0, sizeof(smtTnUploadURL));
@@ -423,9 +424,25 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,i
 
     CvFileStorage* fs = cvOpenFileStorage("/tmp/BlobTracking.xml", 0, CV_STORAGE_READ);
     if(fs) {
-        smartThInst->debugBlob = cvReadIntByName(fs, 0, "debugBlob", false);
+        int dBlob = cvReadIntByName(fs, 0, "debugBlob", false);
         cvReleaseFileStorage(&fs);
-        RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): debugBlob:%d\n", __FILE__, __LINE__, smartThInst->debugBlob);
+        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): The value of debugBlob: %d\n", __FILE__, __LINE__, dBlob);
+        if (dBlob) {
+            smartThInst->debugBlob = true;
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): debugBlob is enabled\n", __FILE__, __LINE__);
+            if (dBlob == 1) {
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): debugBlob on full frame is enabled\n", __FILE__, __LINE__);
+                smartThInst->debugBlobOnFullFrame = true;
+            }
+            else {
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): debugBlob on smart thumbnail is enabled\n", __FILE__, __LINE__);
+                smartThInst->debugBlobOnFullFrame = false;
+            }
+        }
+        else {
+            smartThInst->debugBlob = false;
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): debugBlob is disabled\n", __FILE__, __LINE__);
+        }
     } else {
         RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to read BlobTracking.xml\n", __FILE__, __LINE__);
     }
@@ -576,7 +593,7 @@ STH_STATUS SmartThumbnail::saveSTN()
 	    // convert the frame to BGR format
 	    cv::cvtColor(ofData.maxBboxObjYUVFrame,lHresRGBMat, cv::COLOR_YUV2BGR_NV12);
 #endif
-           if(smartThInst->debugBlob) {
+           if ((smartThInst->debugBlob) && (smartThInst->debugBlobOnFullFrame)) {
                cv::Size fullCropSize = {lHresRGBMat.cols, lHresRGBMat.rows};
                cv::Point2f lHresCenter = {lHresRGBMat.cols/2, lHresRGBMat.rows/2};
                getRectSubPix(lHresRGBMat, fullCropSize, lHresCenter, croppedObj);
@@ -610,7 +627,7 @@ STH_STATUS SmartThumbnail::saveSTN()
             double scaleFactor = 1;
 	    cv::Size cropSize = getCropSize(unionBox, sTnWidth, sTnHeight, &scaleFactor);
             if(scaleFactor != 1) {
-                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Resizing scale for the thumbnail is %ld\n", __FILE__, __LINE__, scaleFactor);
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Resizing scale for the thumbnail is %lf\n", __FILE__, __LINE__, scaleFactor);
                 cv::Size rescaleSize = cv::Size(lHresRGBMat.cols/scaleFactor, lHresRGBMat.rows/scaleFactor);
                 //resize the frame to fit the union blob in the thumbnail
                 cv::resize(lHresRGBMat, lHresRGBMat, rescaleSize);
@@ -622,9 +639,10 @@ STH_STATUS SmartThumbnail::saveSTN()
             } else {
                 RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Not resizing the thumbnail\n", __FILE__, __LINE__);
             }
+
 	    cv::Point2f orgCenter = getActualCentroid(unionBox);
 	    cv::Point2f allignedCenter =  alignCentroid(orgCenter, lHresRGBMat, cropSize);
-            if(!(smartThInst->debugBlob)) {
+            if (!(smartThInst->debugBlob) || !(smartThInst->debugBlobOnFullFrame)) {
                 getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
             }
 	    relativeBBox = getRelativeBoundingBox(unionBox, cropSize, allignedCenter);
@@ -635,19 +653,56 @@ STH_STATUS SmartThumbnail::saveSTN()
 	    currSTN.unionBox.boundingBoxWidth = relativeBBox.width;
 	    currSTN.unionBox.boundingBoxHeight = relativeBBox.height;
 
+            for(int32_t i=0; i< UPPER_LIMIT_BLOB_BB; i++) {
+                if(smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd != -1) {
+                    cv::Rect motionBlob, rescaledBlob;
+
+                    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Before rescaling : Motion Blob[%d] : %d, %d, %d, %d\n", __FILE__, __LINE__,i, smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxYOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxWidth, smartThInst->currSTN.objectBoxs[i].boundingBoxHeight);
+
+                    //Resize motion blob according to the scaleFactor
+                    smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd /= scaleFactor;
+                    smartThInst->currSTN.objectBoxs[i].boundingBoxYOrd /= scaleFactor;
+                    smartThInst->currSTN.objectBoxs[i].boundingBoxWidth /= scaleFactor;
+                    smartThInst->currSTN.objectBoxs[i].boundingBoxHeight /= scaleFactor;
+
+                    motionBlob = cv::Rect(smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxYOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxWidth, smartThInst->currSTN.objectBoxs[i].boundingBoxHeight);
+
+                    //Align the motion blob coordinates to the cropped image size
+                    rescaledBlob = getRelativeBoundingBox(motionBlob, cropSize, allignedCenter);
+
+                    smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd = rescaledBlob.x;
+                    smartThInst->currSTN.objectBoxs[i].boundingBoxYOrd = rescaledBlob.y;
+                    smartThInst->currSTN.objectBoxs[i].boundingBoxWidth = rescaledBlob.width;
+                    smartThInst->currSTN.objectBoxs[i].boundingBoxHeight = rescaledBlob.height;
+
+                    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):After rescaling : Motion Blob[%d] : %d, %d, %d, %d\n", __FILE__, __LINE__,i, smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxYOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxWidth, smartThInst->currSTN.objectBoxs[i].boundingBoxHeight);
+                }
+            }
 
            //Update cropped SmartThumbnail Coordinates
            smartThumbCoord.x = (allignedCenter.x - (cropSize.width / 2));
            smartThumbCoord.y = (allignedCenter.y - (cropSize.height / 2));
            smartThumbCoord.width = cropSize.width;
            smartThumbCoord.height = cropSize.height;
-           if(smartThInst->debugBlob) {
-               cv::rectangle(croppedObj, cv::Rect(unionBox.x, unionBox.y, unionBox.width, unionBox.height), cv::Scalar(0,0,255), 4);
-               cv::rectangle(croppedObj, cv::Rect(smartThumbCoord.x, smartThumbCoord.y, smartThumbCoord.width, smartThumbCoord.height), cv::Scalar(255,0,0), 4);
+
+           // Debug Blobs on Smart Thumbnail Frame
+           if (smartThInst->debugBlob && !smartThInst->debugBlobOnFullFrame ) {
+               cv::rectangle(croppedObj, cv::Rect(relativeBBox.x, relativeBBox.y, relativeBBox.width, relativeBBox.height), cv::Scalar(0,0,255), 4);
 
                for(int32_t i=0; i< UPPER_LIMIT_BLOB_BB; i++) {
                    if(smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd != -1) {
                        cv::rectangle(croppedObj, cv::Rect(smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxYOrd, smartThInst->currSTN.objectBoxs[i].boundingBoxWidth, smartThInst->currSTN.objectBoxs[i].boundingBoxHeight), cv::Scalar(0,255,0), 4);
+                   }
+               }
+           }
+           // Debug Blobs on Full High Resolution Frame
+           else if (smartThInst->debugBlob && smartThInst->debugBlobOnFullFrame ) {
+               cv::rectangle(croppedObj, cv::Rect(ofData.boundingBoxXOrd, ofData.boundingBoxYOrd, ofData.boundingBoxWidth, ofData.boundingBoxHeight), cv::Scalar(0,0,255), 4);
+               cv::rectangle(croppedObj, cv::Rect(smartThumbCoord.x, smartThumbCoord.y, smartThumbCoord.width, smartThumbCoord.height), cv::Scalar(255,0,0), 4);
+
+               for(int32_t i=0; i< UPPER_LIMIT_BLOB_BB; i++) {
+                   if(smartThInst->currSTN.objectBoxs[i].boundingBoxXOrd != -1) {
+                       cv::rectangle(croppedObj, cv::Rect(smartThInst->objectBoxs[i].boundingBoxXOrd, smartThInst->objectBoxs[i].boundingBoxYOrd, smartThInst->objectBoxs[i].boundingBoxWidth, smartThInst->objectBoxs[i].boundingBoxHeight), cv::Scalar(0,255,0), 4);
                    }
                }
            }
