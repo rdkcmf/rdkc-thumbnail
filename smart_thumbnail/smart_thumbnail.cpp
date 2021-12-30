@@ -30,10 +30,9 @@ int SmartThumbnail::waitingInterval = 1 ;
 #ifdef ENABLE_TEST_HARNESS
 void SmartThumbnail::waitForNextDetectionFrame()
 {
-    std::unique_lock<std::mutex> lock(hres_data_lock);
+    std::unique_lock<std::mutex> lock(smartThInst->hres_data_lock);
     //Check if the currently captured frames is the exact 1sec from after last frame read for delivery detection
     detectionCv.wait(lock, [this] {return (((lastProcessedFrame != FrameNum) && ((FrameNum - THFrameNum) % fps == 0))|| (detectionTstamp == 0) || clipEnd || termFlag);});
-    clipEnd = false;
     lock.unlock();
 }
 
@@ -59,6 +58,19 @@ void SmartThumbnail::notifyXvision(const DetectionResult &result, double motionT
         rtMessage_SetInt32(personInfo, "boundingBoxHeight", result.personBBoxes[i][3]);
         rtMessage_SetDouble(personInfo, "confidence", result.personScores[i]*100);
         rtMessage_AddMessage(m, "Persons", personInfo);
+        rtMessage_Release(personInfo);
+    }
+
+    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.VIDEOANALYTICS","%s(%d) non ROI person count : %d\n", __FILE__,__LINE__, result.nonROIPersonBBoxes.size());
+    for(int i = 0; i < result.nonROIPersonBBoxes.size(); i++) {
+        rtMessage personInfo;
+        rtMessage_Create(&personInfo);
+        rtMessage_SetInt32(personInfo, "boundingBoxXOrd", result.nonROIPersonBBoxes[i][0]);
+        rtMessage_SetInt32(personInfo, "boundingBoxYOrd", result.nonROIPersonBBoxes[i][1]);
+        rtMessage_SetInt32(personInfo, "boundingBoxWidth", result.nonROIPersonBBoxes[i][2]);
+        rtMessage_SetInt32(personInfo, "boundingBoxHeight", result.nonROIPersonBBoxes[i][3]);
+        rtMessage_SetDouble(personInfo, "confidence", result.nonROIPersonScores[i]*100);
+        rtMessage_AddMessage(m, "nonROIPersons", personInfo);
         rtMessage_Release(personInfo);
     }
 
@@ -126,7 +138,7 @@ void SmartThumbnail::onCompletedDeliveryDetection(const DetectionResult &result)
 #ifndef ENABLE_TEST_HARNESS
     time_taken = (smartThInst->detectionEndTime.tv_sec - smartThInst->detectionStartTime.tv_sec) * 1e6;
     time_taken = (time_taken + (smartThInst->detectionEndTime.tv_usec - smartThInst->detectionStartTime.tv_usec)) * 1e-6;
-    if((smartThInst->uploadTriggeredTime.tv_sec != 0) || (smartThInst->uploadTriggeredTime.tv_usec != 0)) {
+    if((smartThInst->uploadTriggeredTime.tv_sec > smartThInst->detectionStartTime.tv_sec)) {
         time_waited = (smartThInst->detectionEndTime.tv_sec - smartThInst->uploadTriggeredTime.tv_sec) * 1e6;
         time_waited = (time_waited + (smartThInst->detectionEndTime.tv_usec - smartThInst->uploadTriggeredTime.tv_usec)) * 1e-6;
     }
@@ -146,6 +158,71 @@ void SmartThumbnail::onCompletedDeliveryDetection(const DetectionResult &result)
     smartThInst->setDetectionStatus(true);
     smTnInstance->detectionInProgress = false;
 }
+
+std::vector<cv::Point> SmartThumbnail::getPolygonInCroppedRegion(std::vector<cv::Point> polygon, std::vector<cv::Point> croppedRegion) {
+    std::vector<cv::Point> instersectArea, relativeArea;
+    /* Get the intersection of polygon and Cropping region */
+    float intersection = cv::intersectConvexConvex(croppedRegion, polygon, relativeArea);
+    RDK_LOG(RDK_LOG_DEBUG ,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) intersection area = %f\n", __FILE__, __LINE__, intersection);
+    if(intersection <= 0) {
+        relativeArea = std::move(polygon);
+    }
+    for(int i = 0; i < relativeArea.size(); i++) {
+        int x = std::max(0, relativeArea[i].x - croppedRegion[0].x);
+        int y = std::max(0, relativeArea[i].y - croppedRegion[0].y);
+        instersectArea.push_back(cv::Point(x,y));
+    } 
+    return instersectArea;
+}
+
+bool SmartThumbnail::waitForNextMotionFrame()
+{
+    bool status = false;
+
+    {
+        std::unique_lock<std::mutex> lock(detectionNextFrameMutex);
+        detectionNextFrame_cv.wait(lock, [this] {return (isMotionFrame || clipEnd || termFlag);});
+
+        if(!termFlag) {
+            RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due to either isMotionFrame or clipEnd flag!!\n",__FUNCTION__,__LINE__);
+            status = isMotionFrame;
+            isMotionFrame = false;
+        } else {
+            RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due term flag!!\n",__FUNCTION__,__LINE__);
+            status = false;
+        }
+
+        lock.unlock();
+    }
+
+    return status;
+}
+
+STH_STATUS SmartThumbnail::setMotionFrame(bool status)
+{
+    {
+        std::unique_lock<std::mutex> lock(detectionNextFrameMutex);
+        isMotionFrame = status;
+        lock.unlock();
+    }
+
+    detectionNextFrame_cv.notify_one();
+    return STH_SUCCESS;
+}
+
+STH_STATUS SmartThumbnail::setClipEnd(bool status)
+{
+    {
+        std::unique_lock<std::mutex> lock(detectionNextFrameMutex);
+        clipEnd = status;
+        lock.unlock();
+    }
+
+    detectionNextFrame_cv.notify_one();
+    return STH_SUCCESS;
+}
+
+
 #endif
 
 /** @description: Constructor
@@ -1451,9 +1528,12 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
 	if(!smartThInst->cvrClipGenStarted) {
 		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d \t2. Recevied CVR_CLIP_GEN_END before CVR_CLIP_GEN_START.\n", __FUNCTION__, __LINE__);
 	}
+#ifdef _OBJ_DETECTION_
+        smartThInst->setClipEnd(true);
+        smartThInst->detectionNextFrame_cv.notify_one();
 #ifdef ENABLE_TEST_HARNESS
-        smartThInst->clipEnd = true;
         smartThInst->detectionCv.notify_one();
+#endif
 #endif
 
 	if((smartThInst->cvrClipGenStarted) &&
@@ -1493,6 +1573,7 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
         }
 #ifdef _OBJ_DETECTION_
         if(smartThInst->detectionInProgress) {
+            smartThInst->setClipEnd(true);
             cv::Mat emptyMat;
             mpipe_port_onLastFrameEvent(emptyMat, 0, 0);
         }
@@ -1700,8 +1781,8 @@ def _OBJ_DETECTION_
     }
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Not within event quiet time, Capturing frame.\n", __FUNCTION__ , __LINE__);
 #endif
-#ifdef ENABLE_TEST_HARNESS
     std::unique_lock<std::mutex> lock(smartThInst->hres_data_lock);
+#ifdef ENABLE_TEST_HARNESS
 if(smartThInst->testHarnessOnFileFeed)/*strcmp(rdkc_envGet(TEST_HARNESS_ON_FILE_ENABLED), "true") == 0)*/ {
 /*    cv::Mat*/ smartThInst->curr_frame = cv::imread(frame_filename, cv::IMREAD_COLOR);
 #if 0
@@ -1746,6 +1827,7 @@ if(smartThInst->testHarnessOnFileFeed)/*strcmp(rdkc_envGet(TEST_HARNESS_ON_FILE_
 	if( STH_SUCCESS != ret) {
 		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Error Reading High Res YUV Frame return status is %d \n", __FUNCTION__, __LINE__, ret);
 		smartThInst->isHresFrameReady = false;
+                lock.unlock();
 		return;
 	}
 	//RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Success in Reading High Res YUV Frame return status is %d \n", __FUNCTION__, __LINE__, ret);
@@ -1786,10 +1868,76 @@ if(smartThInst->testHarnessOnFileFeed)/*strcmp(rdkc_envGet(TEST_HARNESS_ON_FILE_
     }
 
     smartThInst -> currTstamp = lResFramePTS;
-    lock.unlock();
     smartThInst->detectionCv.notify_one();
 #endif
+    lock.unlock();
 }
+
+#ifdef _OBJ_DETECTION_
+/** @description    : Print roi coordinates.
+ *  @return: void
+ */
+void SmartThumbnail::printROI()
+{
+    if(roi.empty()) {
+        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) ROI in not set.\n", __FUNCTION__ , __LINE__);
+    } else {
+        std::string roiCoords = "";
+
+        for(int i = 0; i < roi.size(); i += 2) {
+            roiCoords += "[" + std::to_string(roi[i]) + "-" + std::to_string(roi[ i+1 ]) + "]";
+        }
+        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) ROI : %s\n", __FUNCTION__ , __LINE__, roiCoords.c_str());
+    }
+}
+
+/** @description    : Print polygon coordinates.
+ *  @param[in]  str : string(can be the name of polygon) to print in front of polygon coordinates
+ *  @param[in] polygon : polygon coordinates
+ *  @return: void
+ */
+void SmartThumbnail::printPolygonCoords(const char * str, std::vector<cv::Point>& polygon)
+{
+    std::string coords = "";
+    if(polygon.empty()) {
+        coords += "{}";
+    } else {
+
+        for(int i = 0; i < polygon.size(); i ++) {
+            coords += "(" + std::to_string(polygon[i].x) + "," + std::to_string(polygon[i].y) + ")";
+        }
+    }
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) %s : %s\n", __FUNCTION__ , __LINE__, str, coords.c_str());
+}
+
+/** @description    : Callback function on ROI change.
+ *  @param[in]  hdr : constant pointer rtMessageHeader
+ *  @param[in] buff : constant pointer uint8_t
+ *  @param[in]    n : uint32_t
+ *  @param[in] closure : void pointer
+ *  @return: void
+ */
+void SmartThumbnail::onMsgROIChanged(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure)
+{
+    (void) closure;
+    int coordCount = 0;
+
+    rtMessage m;
+    rtMessage_FromBytes(&m, buff, n);
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Clearing ROI.\n", __FUNCTION__ , __LINE__);
+    smartThInst -> roi.clear();
+    rtMessage_GetInt32(m,"ROICount", &coordCount);
+    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) ROI coordinates count: %d\n", __FUNCTION__ , __LINE__, coordCount);
+    for(int i = 0; i < coordCount; i++) {
+        double coordinate = 0;
+        std::string tag = "ROICoord" + std::to_string(i);
+        rtMessage_GetDouble(m, tag.c_str(), &coordinate);
+        smartThInst -> roi.push_back(coordinate);
+        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) ROI coordinate: %lf\n", __FUNCTION__ , __LINE__, coordinate);
+    }
+    rtMessage_Release(m);
+}
+#endif
 
 /** @description    : Callback function to generate smart thumbnail based on motion.
  *  @param[in]  hdr : constant pointer rtMessageHeader
@@ -1842,14 +1990,6 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
     RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): curr timestamp (uint64):%llu\n", __FILE__, __LINE__,curr_time);
     iss.clear();
 
-#ifdef _OBJ_DETECTION_
-    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Last Motion time stamp: %lu\n", __FUNCTION__ , __LINE__, smartThInst->motion_time);
-    if(smartThInst->detectionEnabled && sm.event_type == 4) {
-        smartThInst->currentBbox.x = sm.deliveryUnionBox.boundingBoxXOrd;
-        smartThInst->currentBbox.y = sm.deliveryUnionBox.boundingBoxYOrd;
-        smartThInst->currentBbox.width = sm.deliveryUnionBox.boundingBoxWidth;
-        smartThInst->currentBbox.height = sm.deliveryUnionBox.boundingBoxHeight;
-    }
 #if 0
     // ignore frames and metadata for event_quiet_time
     if( (currTime.tv_sec < (smartThInst->motion_time + smartThInst->event_quiet_time)) &&  (0 != smartThInst->motion_time) ) {
@@ -1858,7 +1998,6 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 	return;
     }
     RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Not within event quiet time, Capturing frame.\n", __FUNCTION__ , __LINE__);
-#endif 
 #endif
 
     lBboxArea = sm.unionBox.boundingBoxWidth * sm.unionBox.boundingBoxHeight;
@@ -1882,6 +2021,34 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 	smartThInst->logROIMotionEvent = false;
 	sprintf(smartThInst->motionLog, "Received ROI MOTION from xvision during the current cvr interval,  time received: %llu", curr_time);
     }
+
+#ifdef _OBJ_DETECTION_
+    RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Last Motion time stamp: %lu\n", __FUNCTION__ , __LINE__, smartThInst->motion_time);
+    if(smartThInst->detectionEnabled && sm.event_type == 4) {
+        smartThInst->currentBbox.x = sm.deliveryUnionBox.boundingBoxXOrd;
+        smartThInst->currentBbox.y = sm.deliveryUnionBox.boundingBoxYOrd;
+        smartThInst->currentBbox.width = sm.deliveryUnionBox.boundingBoxWidth;
+        smartThInst->currentBbox.height = sm.deliveryUnionBox.boundingBoxHeight;
+        for( int i = 0; i < UPPER_LIMIT_BLOB_BB; i++) {
+            smartThInst->currentMotionBlobs[i].boundingBoxXOrd = sm.objectBoxs[i].boundingBoxXOrd;
+            smartThInst->currentMotionBlobs[i].boundingBoxYOrd = sm.objectBoxs[i].boundingBoxYOrd;
+            smartThInst->currentMotionBlobs[i].boundingBoxWidth = sm.objectBoxs[i].boundingBoxWidth;
+            smartThInst->currentMotionBlobs[i].boundingBoxHeight = sm.objectBoxs[i].boundingBoxHeight;
+        }
+        smartThInst->setMotionFrame(true);
+    } else {
+        smartThInst->setMotionFrame(false);
+/*        smartThInst->currentBbox.x = INVALID_BBOX_ORD;
+        smartThInst->currentBbox.y = INVALID_BBOX_ORD;
+        smartThInst->currentBbox.width = INVALID_BBOX_ORD;
+        smartThInst->currentBbox.height = INVALID_BBOX_ORD;
+        for( int i = 0; i < UPPER_LIMIT_BLOB_BB; i++) {
+            smartThInst->currentMotionBlobs[i].boundingBoxXOrd = INVALID_BBOX_ORD;
+            smartThInst->currentMotionBlobs[i].boundingBoxYOrd = INVALID_BBOX_ORD;
+            smartThInst->currentMotionBlobs[i].boundingBoxWidth = INVALID_BBOX_ORD;
+            smartThInst->currentMotionBlobs[i].boundingBoxHeight = INVALID_BBOX_ORD;*/
+    }
+#endif 
 
     // if motion is detected update the metadata.
     if ((smartThInst->isHresFrameReady) &&
@@ -1916,9 +2083,13 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
                     smartThInst -> isPayloadAvailable = true;
                 } else if(!smartThInst -> detectionInProgress) {
                     RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) No detection is in progress. Starting new detection process.\n", __FUNCTION__ , __LINE__);
+
+		    smTnInstance -> printROI();
+
                     smartThInst->setDetectionStatus(false);
+                    smartThInst->setClipEnd(false);
+                    smartThInst->detectionNextFrame_cv.notify_one();
 #ifdef ENABLE_TEST_HARNESS
-                    smartThInst->clipEnd = false;
                     smartThInst->detectionCv.notify_one();
                     smartThInst -> lastProcessedFrame = 0;
                     smartThInst -> detectionStartTime = smartThInst -> currTstamp;
@@ -1952,6 +2123,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
       RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Metadata discarded. %d %d %d %d %d\n",
         __FUNCTION__ , __LINE__, smartThInst->isHresFrameReady, sm.event_type, lBboxArea, smartThInst->maxBboxArea, isInsideROI);
     }
+
 
     rtMessage_Release(m);
 }
@@ -2046,6 +2218,7 @@ void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t bounding
         ofData.maxBboxObjYUVFrame = curr_frame.clone();
     } else {
 #endif
+    std::unique_lock<std::mutex> lock(smartThInst->hres_data_lock);
 #ifdef _HAS_XSTREAM_
     smartThInst -> hres_y_height = smartThInst -> frameInfo->height;
     smartThInst -> hres_y_width = smartThInst -> frameInfo->width;
@@ -2081,6 +2254,7 @@ void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t bounding
     //Full 720*1280 frame containing max bounding box
     ofData.maxBboxObjYUVFrame = cv::Mat(smartThInst -> hres_frame_info -> height + (smartThInst -> hres_frame_info -> height)/2, smartThInst -> hres_frame_info -> width, CV_8UC1, hres_yuvData).clone();
 #endif
+    lock.unlock();
 
 #ifdef ENABLE_TEST_HARNESS
     }
@@ -2118,6 +2292,9 @@ STH_STATUS SmartThumbnail::rtMsgInit()
 
     rtConnection_AddListener(connectionRecv, "RDKC.SMARTTN.CAPTURE",onMsgCaptureFrame, NULL);
     rtConnection_AddListener(connectionRecv, "RDKC.SMARTTN.METADATA",onMsgProcessFrame, NULL);
+#ifdef _OBJ_DETECTION_
+    rtConnection_AddListener(connectionRecv, "RDKC.SMARTTN.ROICHANGE",onMsgROIChanged, NULL);
+#endif
 #ifdef ENABLE_TEST_HARNESS
     rtConnection_AddListener(connectionRecv, "RDKC.TH.CLIP.STATUS",onMsgCvr, NULL);
     rtConnection_AddListener(connectionRecv, "RDKC.TH.UPLOAD.STATUS",onMsgCvrUpload, NULL);

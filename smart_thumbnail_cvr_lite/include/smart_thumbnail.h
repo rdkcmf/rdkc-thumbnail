@@ -145,7 +145,7 @@ extern "C" {
 #define DEFAULT_GRAPH_PATH "/etc/mediapipe/graphs/rdk/delivery_detection/g_delivery_detection_cpu.pbtxt"
 #define DEFAULT_FRAME_READ_DELAY "1000"
 #define DEFAULT_MAX_FRAMES_CACHED_FOR_DELIVERY_DETECTION "5"
-#define DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD "0.48"
+#define DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD "0.8"
 #define DEFAULT_DELIVERY_DETECTION_MIN_SCORE_THRESHOLD "1"
 #define DETECTION_CONFIG_FILE "/opt/usr_config/detection_attr.conf"
 #define DEFAULT_FRAME_COUNT_TO_PROCESS "5"
@@ -158,6 +158,8 @@ typedef struct detection_config_ {
     std::string delivery_detection_model_min_score_threshold;
     std::string delivery_detection_min_score_threshold;
     std::string frame_count_to_process;
+    std::string roi_filter;
+    std::string motion_cue_filter;
 }DetectionConfig;
 #endif
 
@@ -232,8 +234,12 @@ class SmartThumbnail
         void notifyXvision(const DetectionResult &result, double motionTriggeredTime, int mpipeProcessedframes, double time_taken, double time_waited);
         void waitForClipEnd();
 #endif
+        bool waitForNextMotionFrame();
+        STH_STATUS setMotionFrame(bool status);
+        STH_STATUS setClipEnd(bool status);
 	void onCompletedDeliveryDetection(const DetectionResult &result);
-	friend cv::Mat mpipe_port_getNextFrame();
+        std::vector<cv::Point> getPolygonInCroppedRegion(std::vector<cv::Point> polygon, std::vector<cv::Point> croppedRegion);
+	friend cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionBlobs);
 #endif
         static int stnUploadInterval;
         int stnUploadMaxTimeOut;
@@ -260,6 +266,11 @@ class SmartThumbnail
 	static void onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	//Generate the RGB object detection frame.
 	static void onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+#ifdef _OBJ_DETECTION_
+        static void onMsgROIChanged(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+	void printPolygonCoords(const char * str, std::vector<cv::Point>& polygon);
+        void printROI();
+#endif
 #ifdef ENABLE_TEST_HARNESS
         static void onClipStatus(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 #endif
@@ -324,8 +335,12 @@ class SmartThumbnail
 #endif
 
 #ifdef _OBJ_DETECTION_
+	std::mutex detectionNextFrameMutex;
+	std::condition_variable detectionNextFrame_cv;
+        bool isMotionFrame, clipEnd;
 	unsigned char*  mpipe_hres_yuvData;
 	cv::Rect currentBbox;
+        BoundingBox currentMotionBlobs[UPPER_LIMIT_BLOB_BB];
 	std::mutex deliveryDetectionMutex;
 	bool detectionCompleted;
 	std::condition_variable detection_cv;
@@ -334,6 +349,7 @@ class SmartThumbnail
         bool detectionEnabled;
         int mpipeProcessedframes;
         char currDetectionSTNFname[CONFIG_STRING_MAX];
+        std::vector<double> roi;
 #ifdef ENABLE_TEST_HARNESS
         bool testHarnessOnFileFeed;
         std::vector<cv::Mat> yuvPlanes, yuvChannels;
@@ -344,7 +360,6 @@ class SmartThumbnail
 	int THFileNum, THFrameNum, lastProcessedFrame;
 	int FileNum = 0, FrameNum = 0, fps;
         sem_t semSTNUpload;
-        bool clipEnd;
 #endif
 
 #endif

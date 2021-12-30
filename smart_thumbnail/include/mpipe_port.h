@@ -9,6 +9,10 @@ typedef struct DetectionResult_ {
   std::vector<std::vector<int>> personBBoxes;
   /* The detection score of each (n) person detected in the thumbnail */
   std::vector<float> personScores;
+  /* The bounding boxes of each (n) person detected in the thumbnail */
+  std::vector<std::vector<int>> nonROIPersonBBoxes;
+  /* The detection score of each (n) person detected in the thumbnail */
+  std::vector<float> nonROIPersonScores;
   float deliveryScore;
   int maxAugScore;
 } DetectionResult;
@@ -22,7 +26,7 @@ int mpipe_port_initialize(const std::string &input_video_path, int &width, int &
 int mpipe_port_initialize(int &width, int &height);
 
 /* get next frame, in COLOR_RGB format */
-cv::Mat mpipe_port_getNextFrame();
+cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords);
 void mpipe_port_term();
 
 
