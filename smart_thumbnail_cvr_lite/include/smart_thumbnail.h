@@ -28,7 +28,14 @@
 #include <condition_variable>
 #include <sys/stat.h>
 #include <fcntl.h>
-
+#ifdef _OBJ_DETECTION_
+#include <jansson.h>
+#include <fileUtils.h>
+#include "RFCCommon.h"
+#ifdef ENABLE_TEST_HARNESS
+#include "dev_config.h"
+#endif
+#endif
 #ifdef LEGACY_CFG_MGR
 #include "dev_config.h"
 #else
@@ -64,6 +71,10 @@ extern "C" {
 #include "RFCCommon.h"
 #include "opencv2/opencv.hpp"
 
+#ifdef _OBJ_DETECTION_
+#include "mpipe_port.h"
+#include "base64.h"
+#endif
 
 #define FW_NAME_MAX_LENGTH 512
 #define CONFIG_STRING_MAX (256)
@@ -75,6 +86,7 @@ extern "C" {
 #define STN_HRES_BUFFER_ID              2
 #elif defined(XHB1) || defined (XHC3)
 #define STN_HRES_BUFFER_ID              2
+#define STN_MRES_BUFFER_ID              1
 #else
 #define STN_HRES_BUFFER_ID              0
 #endif
@@ -88,9 +100,19 @@ extern "C" {
 //default width and height of smart thumbnail
 #define STN_DEFAULT_WIDTH		640
 #define STN_DEFAULT_HEIGHT		480
+#ifdef XHB1
+#define STN_HRES_CROP_WIDTH             640
+#define STN_HRES_CROP_HEIGHT            480
+#define STN_MRES_CROP_WIDTH             400
+#define STN_MRES_CROP_HEIGHT            300
+#endif
 
 #define STN_TIMESTAMP_TAG		"timestamp"
+#ifdef ENABLE_TEST_HARNESS
+#define STN_UPLOAD_TIME_INTERVAL	12
+#else
 #define STN_UPLOAD_TIME_INTERVAL	4
+#endif
 
 #define STN_PATH 			"/tmp"
 #define STN_UPLOAD_SEND_LEN		2048
@@ -113,6 +135,31 @@ extern "C" {
 #define BLOB_BB_MAX_LEN         256
 #define INVALID_BBOX_ORD        (-1)
 
+#if defined(_OBJ_DETECTION_) && defined(ENABLE_TEST_HARNESS)
+#define TEST_HARNESS_ON_FILE_ENABLED "Test_Harness_on_File_Enabled"
+#endif
+
+#ifdef _OBJ_DETECTION_
+#define DEFAULT_INPUT_DEV "/dev/video0"
+#define DEFAULT_GRAPH_PATH "/etc/mediapipe/graphs/rdk/delivery_detection/g_delivery_detection_cpu.pbtxt"
+#define DEFAULT_FRAME_READ_DELAY "1000"
+#define DEFAULT_MAX_FRAMES_CACHED_FOR_DELIVERY_DETECTION "5"
+#define DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD "0.3"
+#define DEFAULT_DELIVERY_DETECTION_MIN_SCORE_THRESHOLD "1"
+#define DETECTION_CONFIG_FILE "/opt/usr_config/detection_attr.conf"
+#define DEFAULT_FRAME_COUNT_TO_PROCESS "5"
+
+typedef struct detection_config_ {
+    std::string input_video_path;
+    std::string delivery_detection_graph_path;
+    std::string frame_read_delay;
+    std::string max_num_frames_cached_for_delivery_detection;
+    std::string delivery_detection_model_min_score_threshold;
+    std::string delivery_detection_min_score_threshold;
+    std::string frame_count_to_process;
+}DetectionConfig;
+#endif
+
 typedef enum {
     STH_ERROR = -1,
     STH_SUCCESS,
@@ -131,6 +178,11 @@ typedef struct {
     uint64_t tstamp;
 #ifdef _HAS_DING_
     uint64_t dingtstamp;
+#endif
+#ifdef _OBJ_DETECTION_
+    json_t *detectionResult;
+    uint64_t motionTime;
+    bool deliveryDetected;
 #endif
     BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
     BoundingBox unionBox;
@@ -152,7 +204,7 @@ class SmartThumbnail
     public:
 	static SmartThumbnail* getInstance();
 	//Initialize the buffers and starts msg monitoring, upload thread.
-	STH_STATUS init(char* mac,bool isCVREnabled);
+	STH_STATUS init(char* mac,bool isCVREnabled, bool isDetectionEnabled);
 	//Pushes the data to the upload queue at the end of interval.
 	STH_STATUS createPayload();
 	//Upload smart thumbnail data
@@ -166,6 +218,15 @@ class SmartThumbnail
 	STH_STATUS notify(const char* status);
 	//call Smart thumbnail destructor and deallocates dynamic allocated memory.
 	STH_STATUS destroy();
+#ifdef _OBJ_DETECTION_
+#ifdef ENABLE_TEST_HARNESS
+        void notifyXvision(const DetectionResult &result, double motionTriggeredTime, int mpipeProcessedframes, double time_taken, double time_waited);
+        void waitForClipEnd();
+#endif
+	void onCompletedDeliveryDetection(const DetectionResult &result);
+	friend cv::Mat mpipe_port_getNextFrame();
+#endif
+
     private:
 	SmartThumbnail();
 	~SmartThumbnail();
@@ -202,10 +263,19 @@ class SmartThumbnail
 	static void receiveRtmessage();
 	//Callback function for dynamic logging.
 	static void dynLogOnMessage(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+#ifdef _OBJ_DETECTION_
+	STH_STATUS updateUploadPayload(DetectionResult result);
+        json_t* createJSONFromDetectionResult(DetectionResult result);
+	bool getDeliveryDetectionStatus();
+	STH_STATUS setDeliveryDetectionCompleted(bool status);
+#ifdef ENABLE_TEST_HARNESS
+	void waitForNextDetectionFrame();
+#endif
+#endif
 
 	cv::Point2f getActualCentroid(cv::Rect boundRect);
 	cv::Point2f alignCentroid(cv::Point2f orgCenter, cv::Mat origFrame, cv::Size cropSize);
-	cv::Size getCropSize(cv::Rect boundRect,double w,double h);
+	cv::Size getCropSize(cv::Rect boundRect,double w,double h, double *rescaleSize);
 	cv::Rect getRelativeBoundingBox(cv::Rect boundRect, cv::Size cropSize, cv::Point2f allignedCenter);
 
 	static SmartThumbnail* smartThInst;
@@ -233,6 +303,30 @@ class SmartThumbnail
 	RDKC_PLUGIN_YUVInfo* hres_frame_info;
 #endif
 
+#ifdef _OBJ_DETECTION_
+	unsigned char*  mpipe_hres_yuvData;
+	cv::Rect currentBbox;
+	std::mutex deliveryDetectionMutex;
+	bool detectionCompleted;
+	std::condition_variable detection_cv;
+	struct timeval detectionStartTime, detectionEndTime, uploadTriggeredTime;
+	bool detectionInProgress;
+        bool detectionEnabled;
+        int mpipeProcessedframes;
+#ifdef ENABLE_TEST_HARNESS
+        bool testHarnessOnFileFeed;
+        std::vector<cv::Mat> yuvPlanes, yuvChannels;
+        cv::Mat fileFrameYUV, planeUV, curr_frame;
+        uint64_t currTstamp, detectionTstamp;
+	std::condition_variable detectionCv;
+	std::mutex hres_data_lock;
+	int THFileNum, THFrameNum, lastProcessedFrame;
+	int FileNum = 0, FrameNum = 0, fps;
+        sem_t semSTNUpload;
+        bool clipEnd;
+#endif
+
+#endif
         bool logMotionEvent;
         bool logROIMotionEvent;
         char motionLog[CONFIG_STRING_MAX];
@@ -271,6 +365,7 @@ class SmartThumbnail
 	char firmwareName[FW_NAME_MAX_LENGTH];
 	int sTnHeight;
 	int sTnWidth;
+        uint16_t buf_id;
 	char uploadFname[256];
 	cv::Rect relativeBBox;
 	cv::Rect smartThumbCoord;
@@ -290,6 +385,9 @@ struct SmarttnMetadata_thumb
     char const *strFramePTS;
     int32_t event_type;
     double motionScore;
+#ifdef _OBJ_DETECTION_
+    BoundingBox deliveryUnionBox;
+#endif
     BoundingBox unionBox;
     BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
     char const *s_curr_time;
