@@ -30,8 +30,8 @@ volatile sig_atomic_t  ThumbnailUpload::term_flag = 0;
 int  ThumbnailUpload::activeUploadDuration = 0;
 
 bool ThumbnailUpload::isActiveInterval = false;
-char ThumbnailUpload::fw_name[FW_NAME_MAX_LENGTH] = "";
-char ThumbnailUpload::ver_num[VER_NUM_MAX_LENGTH] = "";
+char ThumbnailUpload::fw_name[FW_NAME_MAX_LENGTH+1] = "";
+char ThumbnailUpload::ver_num[VER_NUM_MAX_LENGTH+1] = "";
 char ThumbnailUpload::mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN+1] = "";
 char ThumbnailUpload::modelName[THUMBNAIL_UPLOAD_MAC_STRING_LEN+1] = "";
 unsigned int ThumbnailUpload::activeModeUploadCounter = 0;
@@ -71,6 +71,14 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 
 #endif
 {
+        memset(tn_upload_server_url, 0, sizeof(tn_upload_server_url));
+        memset(tn_upload_auth_token, 0, sizeof(tn_upload_auth_token));
+        memset(fw_name, 0, sizeof(fw_name));
+        memset(ver_num, 0, sizeof(ver_num));
+        memset(mac_string, 0, sizeof(mac_string));
+        memset(modelName, 0, sizeof(modelName));
+        memset(cmd, 0, sizeof(cmd));
+
 	char url_string[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH+1];
 	m_smVector.reserve(10);
 	http_client = new HttpClient();
@@ -81,11 +89,13 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 
 	/*get upload url*/
 	strncpy(tn_upload_server_url, DEFAULT_THUMBNAIL_UPLOAD_URL, THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH);
+        tn_upload_server_url[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH] = '\0';
 	strncpy(tn_upload_auth_token, DEFAULT_THUMBNAIL_UPLOAD_AUTH_TOKEN, THUMBNAIL_UPLOAD_AUTH_MAX_LENGTH);
+        tn_upload_auth_token[THUMBNAIL_UPLOAD_AUTH_MAX_LENGTH] = '\0';
 
-	/* get upload file name */
-	tn_upload_file_name = (char*)malloc(SIZE);
-	if(NULL != tn_upload_file_name)
+        /* get upload file name */
+        tn_upload_file_name = (char*)malloc(SIZE);
+        if(NULL != tn_upload_file_name)
 	{
 #ifdef SUPPORT_IMAGETOOLS
 		sprintf(tn_upload_file_name,"%s",SNAPSHOT_FILE);
@@ -166,6 +176,7 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 
 	liveCacheConf = (livecache_provision_info_t*) malloc(sizeof(livecache_provision_info_t));
 	int ret = getCameraImageName(fw_name);
+        fw_name[FW_NAME_MAX_LENGTH] = '\0';
         	
 	if (ret == RDKC_FAILURE)
 	{
@@ -173,28 +184,32 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 	}
 
         int ret1 = getCameraVersionNum(ver_num);
+        ver_num[VER_NUM_MAX_LENGTH] = '\0';
         if (ret1 == RDKC_FAILURE)
 	{
 		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera version num\n", __FILE__, __LINE__);
 	}
 #if !defined ( THUMBNAIL_PLATFORM_RPI )
 #ifdef OSI
-	memset(mac_string, 0, sizeof(mac_string));
-	char mac[CONFIG_STRING_MAX];
+        memset(mac_string, 0, sizeof(mac_string));
+        char mac[CONFIG_STRING_MAX+1];
+        memset(mac, 0, sizeof(mac));
         mfrSerializedData_t stdata = {NULL, 0, NULL};
         mfrSerializedType_t stdatatype = mfrSERIALIZED_TYPE_DEVICEMAC;
         
         if(mfrGetSerializedData(stdatatype, &stdata) == mfrERR_NONE)
         {       
-                strncpy(mac,stdata.buf,stdata.bufLen);
-                mac[stdata.bufLen] = '\0';
+                strncpy(mac,stdata.buf,CONFIG_STRING_MAX);
+                mac[CONFIG_STRING_MAX] = '\0';
                 RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac= %s,%s,%d\n",__FILE__, __LINE__,mac,stdata.buf,stdata.bufLen);
                 
                 char tmpMac[CONFIG_STRING_MAX+1];
+                memset(tmpMac, 0, sizeof(tmpMac));
                 char *tmpField;
                 int fieldNum=0;
                 
-                strcpy(tmpMac, mac);
+                strncpy(tmpMac, mac, CONFIG_STRING_MAX);
+                tmpMac[CONFIG_STRING_MAX] = '\0';
                 tmpField = strtok(tmpMac, ":");
                 
                 while (tmpField != NULL && fieldNum < 6)
@@ -217,8 +232,7 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
                       strcat(mac_string, tmpField);
                       tmpField = strtok(NULL, ":");
                	}
-                mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN+1] = '\0';
-                
+                mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN] = '\0';
                 RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac address= %s\n",__FILE__, __LINE__,mac_string);
                 if (stdata.freeBuf != NULL)
                 {       
@@ -231,8 +245,8 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
         stdatatype = mfrSERIALIZED_TYPE_MODELNAME;
         if(mfrGetSerializedData(stdatatype, &stdata) == mfrERR_NONE)
         {
-                strncpy(modelName,stdata.buf,stdata.bufLen);
-		modelName[stdata.bufLen] = '\0';
+                strncpy(modelName,stdata.buf,THUMBNAIL_UPLOAD_MAC_STRING_LEN);
+                modelName[THUMBNAIL_UPLOAD_MAC_STRING_LEN] = '\0';
                 RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):Model Name = %s,%s,%d\n",__FILE__, __LINE__,modelName,stdata.buf,stdata.bufLen);
                 if (stdata.freeBuf != NULL)
                 {
@@ -253,7 +267,8 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
         }
 	else {
 		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera mac address\n", __FILE__, __LINE__);
-		strcpy(mac_string,"No MACADDR");
+		strncpy(mac_string,"No MACADDR",THUMBNAIL_UPLOAD_MAC_STRING_LEN);
+		modelName[THUMBNAIL_UPLOAD_MAC_STRING_LEN] = '\0';
 	}
 #endif
 #endif
@@ -405,10 +420,10 @@ bool ThumbnailUpload::getTNUploadProvAttr()
 				memset(tn_upload_server_url, 0, sizeof(tn_upload_server_url));
 				memset(tn_upload_auth_token, 0, sizeof(tn_upload_auth_token));
 
-				strncpy(tn_upload_server_url, liveCacheConf->url, strlen(liveCacheConf->url));
-				tn_upload_server_url[strlen(liveCacheConf->url)] = '\0';
-				strncpy(tn_upload_auth_token, liveCacheConf->auth_token, strlen(liveCacheConf->auth_token));
-				tn_upload_auth_token[strlen(liveCacheConf->auth_token)] = '\0';
+				strncpy(tn_upload_server_url, liveCacheConf->url, THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH);
+				tn_upload_server_url[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH] = '\0';
+				strncpy(tn_upload_auth_token, liveCacheConf->auth_token, THUMBNAIL_UPLOAD_AUTH_MAX_LENGTH);
+				tn_upload_auth_token[THUMBNAIL_UPLOAD_AUTH_MAX_LENGTH] = '\0';
 			} else {
 				RDK_LOG(RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): thumbnail upload not enabled.\n", __FILE__, __LINE__);
 				ret = false;
@@ -443,6 +458,7 @@ ThumbnailUpload *ThumbnailUpload::getTNUploadInstance()
 		}
 
         	int ret1 = getCameraVersionNum(ver_num);
+                ver_num[VER_NUM_MAX_LENGTH] = '\0';
         	if (ret1 == RDKC_FAILURE)
 		{
 			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera version num\n", __FILE__, __LINE__);
@@ -450,22 +466,23 @@ ThumbnailUpload *ThumbnailUpload::getTNUploadInstance()
 #if !defined ( THUMBNAIL_PLATFORM_RPI )
 #ifdef OSI
 		memset(mac_string, 0, sizeof(mac_string));
-		char mac[CONFIG_STRING_MAX];
+		char mac[CONFIG_STRING_MAX+1];
         	mfrSerializedData_t stdata = {NULL, 0, NULL};
         	mfrSerializedType_t stdatatype = mfrSERIALIZED_TYPE_DEVICEMAC;
         
         	if(mfrGetSerializedData(stdatatype, &stdata) == mfrERR_NONE)
         	{       
-                	strncpy(mac,stdata.buf,stdata.bufLen);
-                	mac[stdata.bufLen] = '\0';
-                	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac= %s,%s,%d\n",__FILE__, __LINE__,mac,stdata.buf,stdata.bufLen);
+                        strncpy(mac,stdata.buf,CONFIG_STRING_MAX);
+                        mac[CONFIG_STRING_MAX] = '\0';
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac= %s,%s,%d\n",__FILE__, __LINE__,mac,stdata.buf,stdata.bufLen);
                 
                 	char tmpMac[CONFIG_STRING_MAX+1];
                 	char *tmpField;
                 	int fieldNum=0;
                 
-                	strcpy(tmpMac, mac);
-                	tmpField = strtok(tmpMac, ":");
+                        strncpy(tmpMac, mac, CONFIG_STRING_MAX);
+                        tmpMac[CONFIG_STRING_MAX] = '\0';
+                        tmpField = strtok(tmpMac, ":");
                 
                 	while (tmpField != NULL && fieldNum < 6)
                 	{       
@@ -487,17 +504,14 @@ ThumbnailUpload *ThumbnailUpload::getTNUploadInstance()
                         	strcat(mac_string, tmpField);
                         	tmpField = strtok(NULL, ":");
                 	}
-                	mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN+1] = '\0';
-                
-                	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac address= %s\n",__FILE__, __LINE__,mac_string);
-                	if (stdata.freeBuf != NULL)
+                        mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN] = '\0';
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):mac address= %s\n",__FILE__, __LINE__,mac_string);
+                        if (stdata.freeBuf != NULL)
                 	{       
                         	stdata.freeBuf(stdata.buf);
                         	stdata.buf = NULL;
                 	}
         	}                
-
-		//strcpy(mac_string,"142E5E063FE6");
 #else
 		unsigned char macaddr[MAC_ADDR_LEN];
 
@@ -507,7 +521,8 @@ ThumbnailUpload *ThumbnailUpload::getTNUploadInstance()
         	}
 		else {
 			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ERROR in reading camera mac address\n", __FILE__, __LINE__);
-			strcpy(mac_string,"No MACADDR");
+			strncpy(mac_string,"No MACADDR",THUMBNAIL_UPLOAD_MAC_STRING_LEN);
+                        mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN] = '\0';
 		}
 #endif
 #endif
@@ -753,10 +768,10 @@ void ThumbnailUpload::getTNUploadAttr()
 					memset(tn_upload_auth_token, 0, sizeof(tn_upload_auth_token));
 					//strcpy(tn_upload_server_url, liveCacheConf->url);
 					//strcpy(tn_upload_auth_token, liveCacheConf->auth_token);
-					strncpy(tn_upload_server_url, liveCacheConf->url, strlen(liveCacheConf->url));
-					tn_upload_server_url[strlen(liveCacheConf->url)] = '\0';
-					strncpy(tn_upload_auth_token, liveCacheConf->auth_token, strlen(liveCacheConf->auth_token));
-					tn_upload_auth_token[strlen(liveCacheConf->auth_token)] = '\0';
+					strncpy(tn_upload_server_url, liveCacheConf->url, THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH);
+					tn_upload_server_url[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH] = '\0';
+					strncpy(tn_upload_auth_token, liveCacheConf->auth_token, THUMBNAIL_UPLOAD_AUTH_MAX_LENGTH);
+					tn_upload_auth_token[THUMBNAIL_UPLOAD_AUTH_MAX_LENGTH] = '\0';
 					tn_upload_enable = true;
 				} else {
 					tn_upload_enable = false;
@@ -986,7 +1001,6 @@ int ThumbnailUpload::uploadThumbnailImage()
 	int file_len = 0;
 	struct stat file_stat;
 	char pack_head[THUMBNAIL_UPLOAD_SEND_LEN+1];
-//	unsigned char macaddr[MAC_ADDR_LEN];
 	char url_string[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH+1];
 	long response_code = 0;
 	int ret_jpeg = 0;
@@ -1517,7 +1531,7 @@ int getCameraImageName(char* out)
         }
         /* unable to get the image name */
         //WalError("unable to get the image name");
-        strcpy(out,"imagename entry not found");
+        strncpy(out,"imagename entry not found",FW_NAME_MAX_LENGTH);
         free(file_buffer);
         fclose(fp);
         return RDKC_SUCCESS;

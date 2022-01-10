@@ -80,7 +80,7 @@ extern "C" {
 #define THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH      		512
 #define THUMBNAIL_UPLOAD_AUTH_MAX_LENGTH       		1024
 #define THUMBNAIL_UPLOAD_SEND_LEN              		2048
-#define THUMBNAIL_UPLOAD_MAC_STRING_LEN        		12
+#define THUMBNAIL_UPLOAD_MAC_STRING_LEN        		50
 #define SIZE     			       		50
 
 #define DEFAULT_THUMBNAIL_UPLOAD_ENABLE 		true
@@ -169,8 +169,8 @@ private:
 	void releaseResources();
 	static ThumbnailUpload* thumbnailUpload;
 	HttpClient *http_client;
-        char tn_upload_server_url[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH];
-        char tn_upload_auth_token[THUMBNAIL_UPLOAD_AUTH_MAX_LENGTH];
+        char tn_upload_server_url[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH+1];
+        char tn_upload_auth_token[THUMBNAIL_UPLOAD_AUTH_MAX_LENGTH+1];
 	int json_prov_tn_upload_enabled;
 	static int tn_upload_interval;
 	static bool tn_upload_enable;
@@ -179,13 +179,13 @@ private:
 	char* tn_upload_file_name;
 	static bool isActiveInterval;
 	static int activeUploadDuration;
-	static char fw_name[FW_NAME_MAX_LENGTH];
-	static char ver_num[VER_NUM_MAX_LENGTH];
+	static char fw_name[FW_NAME_MAX_LENGTH+1];
+	static char ver_num[VER_NUM_MAX_LENGTH+1];
 	static char mac_string[THUMBNAIL_UPLOAD_MAC_STRING_LEN + 1];
 	static char modelName[THUMBNAIL_UPLOAD_MAC_STRING_LEN + 1];
 	static rtConnection con;
 	static unsigned int activeModeUploadCounter;
-	char cmd[MAXSIZE];
+	char cmd[MAXSIZE+1];
 	static int uploadRetryCount;
 	int m_count;
 	curl_off_t m_avgUploadSpeed;
