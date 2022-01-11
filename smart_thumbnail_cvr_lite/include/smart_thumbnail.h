@@ -108,11 +108,9 @@ extern "C" {
 #endif
 
 #define STN_TIMESTAMP_TAG		"timestamp"
-#ifdef ENABLE_TEST_HARNESS
-#define STN_UPLOAD_TIME_INTERVAL	12
-#else
 #define STN_UPLOAD_TIME_INTERVAL	4
-#endif
+#define DELIVERY_STN_UPLOAD_TIME_INTERVAL	16
+#define STN_MAX_PAYLOAD_COUNT           4
 
 #define STN_PATH 			"/tmp"
 #define STN_UPLOAD_SEND_LEN		2048
@@ -124,6 +122,8 @@ extern "C" {
 
 #define STN_TRUE			"true"
 #define STN_FALSE			"false"
+
+#define CACHE_SMARTTHUMBNAIL "/tmp/cache_smart_thumbnail.txt"
 
 #define RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC   "RDKC.ENABLE_DYNAMIC_LOG"
 
@@ -143,7 +143,7 @@ extern "C" {
 #define DEFAULT_GRAPH_PATH "/etc/mediapipe/graphs/rdk/delivery_detection/g_delivery_detection_cpu.pbtxt"
 #define DEFAULT_FRAME_READ_DELAY "1000"
 #define DEFAULT_MAX_FRAMES_CACHED_FOR_DELIVERY_DETECTION "5"
-#define DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD "0.3"
+#define DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD "0.48"
 #define DEFAULT_DELIVERY_DETECTION_MIN_SCORE_THRESHOLD "1"
 #define DETECTION_CONFIG_FILE "/opt/usr_config/detection_attr.conf"
 #define DEFAULT_FRAME_COUNT_TO_PROCESS "5"
@@ -174,15 +174,16 @@ typedef struct _tBoundingBox
 }BoundingBox;
 
 typedef struct {
+    char fname[64];
     uint64_t tstamp;
 #ifdef _HAS_DING_
     uint64_t dingtstamp;
 #endif
 #ifdef _OBJ_DETECTION_
     json_t *detectionResult;
-    uint64_t motionTime;
     bool deliveryDetected;
 #endif
+    uint64_t motionTime;
     BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
     BoundingBox unionBox;
     uint64_t tsDelta;
@@ -204,14 +205,20 @@ class SmartThumbnail
 	static SmartThumbnail* getInstance();
 	//Initialize the buffers and starts msg monitoring, upload thread.
 	STH_STATUS init(char* mac,bool isCVREnabled, bool isDetectionEnabled);
+        //get upload status
+        bool getUploadStatus();
+        //set upload status
+        STH_STATUS setUploadStatus(bool status);
 	//Pushes the data to the upload queue at the end of interval.
 	STH_STATUS createPayload();
+        //Routine to upload STN Payload
+        static void uploadSTN();
 	//Upload smart thumbnail data
-	int uploadPayload(time_t timeLeft);
+	void uploadPayload();
 	//to update the event quiet interval
         int getQuietInterval();
 #ifdef _HAS_DING_
-	bool waitFor(int quiteInterVal);
+//	bool waitFor(int quiteInterVal);
 #endif
 	//notify start or end of smart thumbnail process
 	STH_STATUS notify(const char* status);
@@ -225,6 +232,7 @@ class SmartThumbnail
 	void onCompletedDeliveryDetection(const DetectionResult &result);
 	friend cv::Mat mpipe_port_getNextFrame();
 #endif
+        static int stnUploadInterval;
 
     private:
 	SmartThumbnail();
@@ -239,6 +247,9 @@ class SmartThumbnail
 	int setMacAddress();
 	// registers Callback for rtmessage
 	STH_STATUS rtMsgInit();
+        STH_STATUS addSTN();
+        STH_STATUS delSTN(char* uploadFname);
+        void printSTNList();
 	void stringifyEventDateTime(char* strEvtDateTime , size_t evtdatetimeSize, time_t evtDateTime);
 	//Read the High resolution YUV frame.
 	static void onMsgCaptureFrame(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
@@ -252,6 +263,7 @@ class SmartThumbnail
 	static void  updateObjFrameData(int32_t boundingBoxXOrd,int32_t boundingBoxYOrd,int32_t boundingBoxWidth,int32_t boundingBoxHeight,uint64_t currTime);
         //Updates object Boxes
         void  updateObjectBoxs(BoundingBox *objectBox, int32_t index);
+	int retryAtExpRate();
 
         void resetObjFrameData();
         
@@ -263,7 +275,7 @@ class SmartThumbnail
 	//Callback function for dynamic logging.
 	static void dynLogOnMessage(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 #ifdef _OBJ_DETECTION_
-	STH_STATUS updateUploadPayload(DetectionResult result);
+	STH_STATUS updateUploadPayload(char * fname, DetectionResult result);
         json_t* createJSONFromDetectionResult(DetectionResult result);
 	bool getDeliveryDetectionStatus();
 	STH_STATUS setDeliveryDetectionCompleted(bool status);
@@ -280,12 +292,12 @@ class SmartThumbnail
 	static SmartThumbnail* smartThInst;
 	int g_hres_buf_id;
    	bool hres_yuvDataMemoryAllocationDone;
-#ifdef _HAS_DING_
-	DingNotification* m_ding;
+	bool m_uploadReady;
 	std::condition_variable m_cv;
 	std::mutex m_uploadMutex;
+#ifdef _HAS_DING_
+	DingNotification* m_ding;
 	bool m_dingNotif;
-	bool m_uploadReady;
 	uint64_t m_dingTime;
 	STH_STATUS setUploadStatus(bool status);
 	static void onDingNotification(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
@@ -312,6 +324,7 @@ class SmartThumbnail
 	bool detectionInProgress;
         bool detectionEnabled;
         int mpipeProcessedframes;
+        char currDetectionSTNFname[CONFIG_STRING_MAX];
 #ifdef ENABLE_TEST_HARNESS
         bool testHarnessOnFileFeed;
         std::vector<cv::Mat> yuvPlanes, yuvChannels;
@@ -335,6 +348,9 @@ class SmartThumbnail
 	bool rtmessageSTHThreadExit;
 	bool isPayloadAvailable;
 	std::mutex QMutex;
+        std::mutex stnMutex;
+        std::vector<STHPayload> STNList;
+	static int waitingInterval;
 	rtConnection connectionRecv;
 	rtConnection connectionSend;
 	rtError err;

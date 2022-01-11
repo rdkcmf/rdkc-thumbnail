@@ -168,11 +168,11 @@ int main(int argc, char** argv)
 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Notify xvision and cvr daemon.\n", __FILE__, __LINE__);
 		
         //Initially sleep for upload interval time, to allow smart thumbnail to be generated.
-	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Putting the Smart Thumnail Upload to sleep for %d seconds.\n", __FILE__, __LINE__, STN_UPLOAD_TIME_INTERVAL);
+	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Putting the Smart Thumnail Upload to sleep for %d seconds.\n", __FILE__, __LINE__, smTnInstance-> stnUploadInterval);
 #ifdef ENABLE_TEST_HARNESS
         smTnInstance -> waitForClipEnd();
 #else
-        sleep(STN_UPLOAD_TIME_INTERVAL);
+        sleep(smTnInstance-> stnUploadInterval);
 #endif
 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail Upload is ready.\n", __FILE__, __LINE__);
 
@@ -203,11 +203,11 @@ int main(int argc, char** argv)
 				RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Time spent for payload creation %d seconds!!!\n", __FILE__, __LINE__, (currTime.tv_sec - startTime.tv_sec));
 
 				// sleep maximum of smart thumbnail time interval(~15 seconds)
-				if( (currTime.tv_sec - startTime.tv_sec) >= STN_UPLOAD_TIME_INTERVAL ) {
+				if( (currTime.tv_sec - startTime.tv_sec) >= smTnInstance-> stnUploadInterval ) {
 					RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exceed upload time interval!!!\n", __FILE__, __LINE__);
 					continue;
 				} else {
-					remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
+					remainingTime =  smTnInstance-> stnUploadInterval - (currTime.tv_sec - startTime.tv_sec);
 					RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
 #ifdef ENABLE_TEST_HARNESS
                                         smTnInstance -> waitForClipEnd();
@@ -218,27 +218,26 @@ int main(int argc, char** argv)
 				}
                 }
 
-		RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Created payload for smart thumnail successfully.. Going to upload now!!!\n", __FILE__, __LINE__);
+		RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Created payload for smart thumnail successfully.. Adding to list!!!\n", __FILE__, __LINE__);
 
 		// clock the current time
 		memset(&currTime, 0, sizeof(currTime));
 	       	clock_gettime(CLOCK_REALTIME, &currTime);
-		RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): currTime.tv_sec %d startTime.tv_sec %d (currTime.tv_sec - startTime.tv_sec)!!!\n", __FILE__, __LINE__, currTime.tv_sec, startTime.tv_sec, (currTime.tv_sec - startTime.tv_sec));
+		RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): currTime.tv_sec %d startTime.tv_sec %d (currTime.tv_sec - startTime.tv_sec) %d!!!\n", __FILE__, __LINE__, currTime.tv_sec, startTime.tv_sec, (currTime.tv_sec - startTime.tv_sec));
 
-	        smTnInstance->uploadPayload(STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec));
 
 		// clock the current time
 		memset(&currTime, 0, sizeof(currTime));
 	       	clock_gettime(CLOCK_REALTIME, &currTime);
 
-		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Time spent to upload smart thumbnail %d seconds!!!\n", __FILE__, __LINE__, (currTime.tv_sec - startTime.tv_sec));
-		if( (currTime.tv_sec - startTime.tv_sec) >= STN_UPLOAD_TIME_INTERVAL ) {
+//		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Time spent to upload smart thumbnail %d seconds!!!\n", __FILE__, __LINE__, (currTime.tv_sec - startTime.tv_sec));
+		if( (currTime.tv_sec - startTime.tv_sec) >= smTnInstance-> stnUploadInterval ) {
 			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exceed upload time interval!!!\n", __FILE__, __LINE__);
 			continue;
 		}
 		else {
 			//calculate the time needed to sleep for next interval.
-			remainingTime =  STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
+			remainingTime =  smTnInstance-> stnUploadInterval - (currTime.tv_sec - startTime.tv_sec);
 			RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Sleep for remaining %d seconds!!!\n", __FILE__, __LINE__, remainingTime);
 #ifdef ENABLE_TEST_HARNESS
                         smTnInstance -> waitForClipEnd();
