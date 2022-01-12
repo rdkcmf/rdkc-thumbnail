@@ -2103,8 +2103,6 @@ void SmartThumbnail::uploadPayload()
             b64_encode((uint8_t*)jsonStr, strlen(jsonStr), (uint8_t*)encodedBuff);
             RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): encoded X-IMAGE-METADATA: %s\n", __FUNCTION__, __LINE__, (char*)encodedBuff);
             smartThInst->httpClient->addHeader("X-IMAGE-METADATA", encodedBuff);
-            free(jsonStr);
-            json_decref(payload.detectionResult);
         }
 #endif
 
@@ -2167,6 +2165,12 @@ void SmartThumbnail::uploadPayload()
         }
         RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Removing smart thumbnail upload file: %s\n",__FILE__, __LINE__, uploadFname);
         delSTN(uploadFname);
+#endif
+#ifdef _OBJ_DETECTION_
+    if(smartThInst -> detectionEnabled) {
+        free(jsonStr);
+        json_decref(payload.detectionResult);
+    }
 #endif
 }
 
