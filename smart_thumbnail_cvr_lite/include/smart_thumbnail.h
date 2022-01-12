@@ -329,6 +329,7 @@ class SmartThumbnail
         bool logMotionEvent;
         bool logROIMotionEvent;
         char motionLog[CONFIG_STRING_MAX];
+
 	std::thread rtMessageReceive;
 	std::thread uploadThread;
 	bool rtmessageSTHThreadExit;

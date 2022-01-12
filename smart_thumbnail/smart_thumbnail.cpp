@@ -132,6 +132,9 @@ void SmartThumbnail::onCompletedDeliveryDetection(const DetectionResult &result)
     }
 #endif
     memset(&(smartThInst -> uploadTriggeredTime), 0, sizeof(smartThInst -> uploadTriggeredTime));
+    if(result.deliveryScore < 0) {
+        RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Delivery detection failed\n", __FUNCTION__, __LINE__);
+    }
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection Stats:%0.2f,%d,%d,%0.2lf,%d,%0.2lf,%0.2lf\n", __FUNCTION__, 
              __LINE__, result.deliveryScore, result.maxAugScore, result.personScores.size(), 
              motionTriggeredTime, mpipeProcessedframes, time_taken, time_waited);
@@ -973,14 +976,14 @@ STH_STATUS SmartThumbnail::updateUploadPayload(char * fname, DetectionResult res
 //    std::unique_lock<std::mutex> lock(stnMutex);
     detectionResult = createJSONFromDetectionResult(result);
     if(!strcmp(currSTN.fname, fname)) {
-        if(result.deliveryScore != 0) {
+        if(result.deliveryScore > 0) {
             currSTN.deliveryDetected = true;
         }
         //json_decref(currSTN.detectionResult);
         currSTN.detectionResult = json_copy(detectionResult);
     }
     if(!strcmp(payload.fname, fname)) {
-        if(result.deliveryScore != 0) {
+        if(result.deliveryScore > 0) {
             payload.deliveryDetected = true;
         }
 //        json_decref(payload.detectionResult);
@@ -990,7 +993,7 @@ STH_STATUS SmartThumbnail::updateUploadPayload(char * fname, DetectionResult res
         if(!strcmp((*it).fname, fname)){
 //            json_decref((*it).detectionResult);
             (*it).detectionResult = json_copy(detectionResult);
-            if(result.deliveryScore != 0) {
+            if(result.deliveryScore > 0) {
                 (*it).deliveryDetected = true;
             }
         }

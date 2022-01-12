@@ -228,7 +228,6 @@ class SmartThumbnail
 	bool getUploadStatus();
 	//set upload status
 	STH_STATUS setUploadStatus(bool status);
-
 	//Upload smart thumbnail data
 	void uploadPayload();
 	//notify start or end of smart thumbnail process
@@ -363,6 +362,7 @@ class SmartThumbnail
 	struct timeval detectionStartTime, clipStartTime;
 #endif
 #endif
+
 	std::condition_variable cv;
 	rtConnection connectionRecv;
 	rtConnection connectionSend;

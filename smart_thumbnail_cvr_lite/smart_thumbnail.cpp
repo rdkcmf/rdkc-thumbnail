@@ -157,6 +157,9 @@ void SmartThumbnail::onCompletedDeliveryDetection(const DetectionResult &result)
     }
 #endif
     memset(&(smartThInst -> uploadTriggeredTime), 0, sizeof(smartThInst -> uploadTriggeredTime));
+    if(result.deliveryScore < 0) {
+        RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Delivery detection failed\n", __FUNCTION__, __LINE__);
+    }
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection Stats:%0.2f,%d,%d,0,%d,%0.2lf,%0.2lf\n", __FUNCTION__, __LINE__, result.deliveryScore, result.maxAugScore, result.personScores.size(), mpipeProcessedframes, time_taken, time_waited);
 
 #ifdef ENABLE_TEST_HARNESS
@@ -632,7 +635,7 @@ STH_STATUS SmartThumbnail::createPayload()
     {
 	//Acquire lock
 	std::unique_lock<std::mutex> lock(smartThInst -> QMutex);
-	if (smartThInst -> isPayloadAvailable )
+	if (smartThInst -> isPayloadAvailable)
 	{
 #ifndef _OBJ_DETECTION_
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->motionLog);
@@ -2184,9 +2187,9 @@ void SmarttnMetadata_thumb::from_rtMessage(SmarttnMetadata_thumb *smInfo, const 
         RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxYOrd:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxYOrd);
         RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxWidth:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxWidth);
         RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): objectBoxs[%d].boundingBoxHeight:%d\n", __FILE__, __LINE__,i,smInfo->objectBoxs[i].boundingBoxHeight);
-
         rtMessage_Release(bbox);
     }
+
 
 }
 /* @description: SmarttnMetadata_thumb constructor
