@@ -108,6 +108,8 @@ extern "C" {
 #endif
 
 #define STN_TIMESTAMP_TAG		"timestamp"
+#define STN_MAX_UPLOAD_TIME_OUT_20	 20
+#define STN_MAX_UPLOAD_TIME_OUT_30	 30
 #define STN_UPLOAD_TIME_INTERVAL	4
 #define DELIVERY_STN_UPLOAD_TIME_INTERVAL	16
 #define STN_MAX_PAYLOAD_COUNT           4
@@ -214,7 +216,8 @@ class SmartThumbnail
         //Routine to upload STN Payload
         static void uploadSTN();
 	//Upload smart thumbnail data
-	void uploadPayload();
+	STH_STATUS uploadPayload();
+	void triggerUpload();
 	//to update the event quiet interval
         int getQuietInterval();
 #ifdef _HAS_DING_
@@ -233,6 +236,7 @@ class SmartThumbnail
 	friend cv::Mat mpipe_port_getNextFrame();
 #endif
         static int stnUploadInterval;
+        int stnUploadMaxTimeOut;
 
     private:
 	SmartThumbnail();
@@ -249,6 +253,7 @@ class SmartThumbnail
 	STH_STATUS rtMsgInit();
         STH_STATUS addSTN();
         STH_STATUS delSTN(char* uploadFname);
+        STH_STATUS delAllSTN();
         void printSTNList();
 	void stringifyEventDateTime(char* strEvtDateTime , size_t evtdatetimeSize, time_t evtDateTime);
 	//Read the High resolution YUV frame.
@@ -279,6 +284,10 @@ class SmartThumbnail
         json_t* createJSONFromDetectionResult(DetectionResult result);
 	bool getDeliveryDetectionStatus();
 	STH_STATUS setDeliveryDetectionCompleted(bool status);
+        bool checkForDeliveryInCache();
+        void waitForDeliveryResult();
+        bool checkForQuietTime();
+        bool updateCacheWithLatestDelivery();
 #ifdef ENABLE_TEST_HARNESS
 	void waitForNextDetectionFrame();
 #endif
