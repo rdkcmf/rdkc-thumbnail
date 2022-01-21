@@ -20,6 +20,7 @@
 modules += src
 modules += smart_thumbnail
 modules += smart_thumbnail_cvr_lite
+modules += event_notifications
 
 all:
 	@for m in $(modules); do echo $$m; make -C $$m $@ || exit 1; done
