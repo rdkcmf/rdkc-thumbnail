@@ -707,19 +707,18 @@ STH_STATUS SmartThumbnail::delAllSTN()
     RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Deleting all the SMT files from cache of size %d\n", __FILE__, __LINE__, STNList.size());
     std::unique_lock<std::mutex> lock(stnMutex);
 
-    for (std::vector<STHPayload>::iterator it = STNList.begin(); it != STNList.end(); ++it) {
-
-        //delete the file first
+    for (int cnt = 0; cnt < STNList.size(); ++cnt) {
         if(stat(CACHE_SMARTTHUMBNAIL, &statbuf) < 0) {
-            RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Deleting %s file, and erasing from list\n", __FUNCTION__ , __LINE__, (*it).fname);
-            unlink((*it).fname);
+            RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Deleting %s file, and erasing from list\n", __FUNCTION__ , __LINE__, STNList[cnt].fname);
+            unlink(STNList[cnt].fname);
         }
         else {
-            RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Caching %s file for reference\n", __FUNCTION__ , __LINE__, (*it).fname);
+            RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Caching %s file for reference\n", __FUNCTION__ , __LINE__, STNList[cnt].fname);
         }
-        it = STNList.erase(it);
-        if(it == STNList.end()) break;
     }
+
+    STNList.clear();
+    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Deleted all the SMT files and cache size is %d\n", __FILE__, __LINE__, STNList.size());
 
     lock.unlock();
     return STH_SUCCESS;
