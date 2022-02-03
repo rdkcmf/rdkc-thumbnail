@@ -49,7 +49,7 @@ class DingNotification
 		~DingNotification();
 		void init(char* mac,char* modelName,char* firmware);
 		bool waitForDing();
-		bool signalDing(bool status,uint64_t dingTime);
+		bool signalDing(bool status,struct timespec dingTime);
                 bool getDingTNUploadStatus() { return m_DingTNuploadStatus ; }
 		int  getQuiteTime();
                 void uploadDingThumbnail();
@@ -77,7 +77,7 @@ class DingNotification
 		int m_quiteTime;
 		int m_snapShotHeight;
 		int m_snapShotWidth;
-		uint64_t m_dingTime;
+		struct timespec m_dingTime;
 		int retryAtExpRate();
 		int getDingConf();
 		int getTnUploadConf();

@@ -39,12 +39,12 @@ DingNotification::DingNotification():
 				m_httpClient(NULL),
 				m_uploadReady(false),
                                 m_DingTNuploadStatus(false),
-				m_dingTime(0),
 				m_quiteTime(DEFAULT_QUITE_TIME),
 				m_dnsCacheTimeout(DEFAULT_DNS_CACHE_TIMEOUT),
     				m_snapShotHeight(HEIGHT),
     				m_snapShotWidth(WIDTH)
 {
+    memset(&m_dingTime, 0, sizeof(m_dingTime));
     memset(m_dingNotifUploadURL, 0, sizeof(m_dingNotifUploadURL));
     memset(m_dingNotifAuthCode, 0, sizeof(m_dingNotifAuthCode));
     memset(m_snapShotUploadURL,0,sizeof(m_snapShotUploadURL));
@@ -122,7 +122,7 @@ bool DingNotification::waitForDing()
     return status;
 }
 
-bool DingNotification::signalDing(bool status,uint64_t currTime)
+bool DingNotification::signalDing(bool status,struct timespec currTime)
 {
     m_dingTime = currTime;
     {
@@ -269,7 +269,7 @@ void DingNotification::stringifyDateTime(char* strEvtDateTime , size_t evtdateti
 
         tv = gmtime(&evtDateTime);
 
-        strftime(strEvtDateTime, evtdatetimeSize,"%FT%TZ",tv);
+        strftime(strEvtDateTime, evtdatetimeSize,"%FT%T",tv);
 }
 
 /** @description: thread routine to upload DingNotification
@@ -285,11 +285,14 @@ void DingNotification::sendDingNotification()
     int remainingTime = 0;
     const char* data = "";
     char dingT[256]={0};
+    char dingTmilliseconds[256]={0};
     struct timespec currTime;
     struct timespec startTime;
     memset(&startTime, 0, sizeof(startTime));
     memset(&currTime, 0, sizeof(currTime));
-    stringifyDateTime(dingT,sizeof(dingT),m_dingTime);
+    stringifyDateTime(dingT,sizeof(dingT),m_dingTime.tv_sec);
+    sprintf(dingTmilliseconds,"%s.%luZ",dingT,((m_dingTime.tv_nsec)/1000000));
+    RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.BUTTONMGR","%s(%d): sendDingNotification: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dingTmilliseconds);
     /* Open the URL */
     if (NULL != m_Instance->m_httpClient) {
          m_Instance->m_httpClient->open(m_Instance->m_dingNotifUploadURL,m_Instance->m_dnsCacheTimeout);
@@ -331,7 +334,7 @@ void DingNotification::sendDingNotification()
         snprintf(packHead, sizeof(packHead), "Sercomm %s %s %s", m_modelName, m_firmwareName, m_macAddress);
         m_httpClient->addHeader( "User-Agent", packHead);
         memset(packHead, 0, sizeof(packHead));
-	snprintf(packHead, sizeof(packHead), "%s", dingT);
+	snprintf(packHead, sizeof(packHead), "%s", dingTmilliseconds);
         m_httpClient->addHeader( "X-EVENT-DATETIME", packHead);
 	memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "%d",0);
@@ -352,7 +355,7 @@ void DingNotification::sendDingNotification()
     }
     //log success/failure for telemetry
     if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Posting Ding is successfull with header X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dingT);
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Posting Ding is successfull with header X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dingTmilliseconds);
     }else {
             RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): Posting Ding is failed with response code %lu and curl code %d\n",__FUNCTION__,__LINE__, response_code, curlCode);
     }
@@ -396,8 +399,10 @@ void  DingNotification::uploadSnapShot()
 	struct timespec startTime;
         struct timespec currTime;;
         long int uploadDuration = 0;
+        long int  totaldinguploadDuration = 0;
 	char packHead[UPLOAD_DATA_LEN+1];
 	char dingT[256]={0};
+        char dingTmilliseconds[256]={0};
         int isCVREnabled = 0;
         m_DingTNuploadStatus = false;
 	
@@ -442,7 +447,9 @@ void  DingNotification::uploadSnapShot()
         	RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): Failed to open the URL\n", __FUNCTION__, __LINE__);
         	return;
     	}
-	stringifyDateTime(dingT,sizeof(dingT),m_dingTime);
+	stringifyDateTime(dingT,sizeof(dingT),m_dingTime.tv_sec);
+        sprintf(dingTmilliseconds,"%s.%luZ",dingT,((m_dingTime.tv_nsec)/1000000));
+        RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.BUTTONMGR","%s(%d): uploadSnapShot: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dingTmilliseconds);
 	m_httpClient->resetHeaderList();
         m_httpClient->addHeader( "Expect", "");   //removing expect header condition by explicitly setting Expect header to ""
         m_httpClient->addHeader( "X-EVENT-TYPE", "ding");
@@ -456,7 +463,7 @@ void  DingNotification::uploadSnapShot()
         snprintf(packHead, sizeof(packHead), "Sercomm %s %s %s", m_modelName, m_firmwareName, m_macAddress);
         m_httpClient->addHeader( "User-Agent", packHead);
         memset(packHead, 0, sizeof(packHead));
-        snprintf(packHead, sizeof(packHead), "%s", dingT);
+        snprintf(packHead, sizeof(packHead), "%s", dingTmilliseconds);
         m_httpClient->addHeader( "X-EVENT-DATETIME", packHead);
         memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "%d",file_len);
@@ -517,13 +524,16 @@ void  DingNotification::uploadSnapShot()
                 }
         }
 	//log success/failure for telemetry
-    	if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
-		 if (0 == uploadRetryCount ) {
-				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d):Thumbnail upload corresponding to ding is successful with header X-EVENT-DATETIME: %s uploadDuration =%ld\n",__FUNCTION__,__LINE__,dingT,uploadDuration);
+        if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
+                memset(&currTime, 0, sizeof(currTime));
+                clock_gettime(CLOCK_REALTIME, &currTime);
+                totaldinguploadDuration = (currTime.tv_sec - m_dingTime.tv_sec)*1000 + ( currTime.tv_nsec - m_dingTime.tv_nsec)/1000000;
+                if (0 == uploadRetryCount ) {
+				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d):Thumbnail upload corresponding to ding is successful with header X-EVENT-DATETIME: %s uploadDuration=%ld TotaldinguploadDuration=%ld\n",__FUNCTION__,__LINE__,dingTmilliseconds,uploadDuration,totaldinguploadDuration);
                 
-                        } else {
-                                RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to ding is successful after %d retries  with header X-EVENT-DATETIME: %s uploadDuration =%ld\n", __FILE__, __LINE__,uploadRetryCount,dingT,uploadDuration);
-                        }
+                } else {
+                                RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to ding is successful after %d retries  with header X-EVENT-DATETIME: %s uploadDuration=%ld TotaldinguploadDuration=%ld\n", __FILE__, __LINE__,uploadRetryCount,dingTmilliseconds,uploadDuration,totaldinguploadDuration);
+               }
 	}else {
             RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to Ding failed with response code %lu and curl code %d\n",__FUNCTION__,__LINE__, response_code, curlCode);
     	}

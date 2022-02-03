@@ -195,7 +195,7 @@ private:
 #ifdef _HAS_DING_
         DingNotification* m_ding;
         bool m_dingNotif;
-        uint64_t m_dingTime;
+        struct timespec m_dingTime;
         static void onDingNotification(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 #endif
 

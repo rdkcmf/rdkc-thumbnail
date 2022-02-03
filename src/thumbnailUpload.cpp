@@ -67,10 +67,12 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 #ifdef _HAS_DING_
                                 , m_ding(NULL)
 			  	, m_dingNotif(false)
-                                , m_dingTime(0)
 
 #endif
 {
+#ifdef _HAS_DING_
+        memset(&m_dingTime, 0, sizeof(m_dingTime));
+#endif
         memset(tn_upload_server_url, 0, sizeof(tn_upload_server_url));
         memset(tn_upload_auth_token, 0, sizeof(tn_upload_auth_token));
         memset(fw_name, 0, sizeof(fw_name));
@@ -676,7 +678,7 @@ void ThumbnailUpload::stringifyEventDateTime(char* strEvtDateTime , size_t evtda
 
         tv = gmtime(&evtDateTime);
 
-        strftime(strEvtDateTime, evtdatetimeSize,"%FT%TZ",tv);
+        strftime(strEvtDateTime, evtdatetimeSize,"%FT%T",tv);
 }
 
 /** @description: This function is to update thumbnail upload active upload duration
@@ -691,20 +693,20 @@ int ThumbnailUpload::updateActiveUploadDuration()
 	time_t currentTime = 0;
 	char *duration = NULL;
         int ret = RDKC_SUCCESS;
-	int uploadDuration = 0;
+        int uploadDurationLeft = 0;
 	char* duration_value = NULL;
 #if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
 	currentTime = getCurrentTime(NULL);
 #else
 	currentTime = sc_linear_time(NULL);
 #endif
-	uploadDuration = activeUploadDuration - currentTime;
+	uploadDurationLeft = activeUploadDuration - currentTime;
 
 	duration = (char*)malloc(SIZE);
 	memset(duration,0,SIZE);
 
-	sprintf(duration, "%d", uploadDuration);
-	if (-1 < uploadDuration)
+	sprintf(duration, "%d", uploadDurationLeft);
+	if (-1 < uploadDurationLeft)
 	{
 		if(RDKC_SUCCESS != rdkc_set_user_setting(THUMBNAIL_ACTIVE_UPLOAD_DURATION, duration))
 		{
@@ -1004,7 +1006,14 @@ int ThumbnailUpload::uploadThumbnailImage()
 	char url_string[THUMBNAIL_UPLOAD_PARAM_MAX_LENGTH+1];
 	long response_code = 0;
 	int ret_jpeg = 0;
+ #ifdef _HAS_DING_
 	char dTnTStamp[256]={0};
+	char dTnTStampmilliseconds[256]={0};
+        long int dingtouploadDuration = 0;
+        long int tncreationDuration = 0;
+        struct timespec tnStartTime;
+        struct timespec currTime;
+ #endif
 
 	/* As customer's requirement, not support http */
 	if (!strncasecmp(tn_upload_server_url,"http://", strlen("http://")))
@@ -1014,6 +1023,17 @@ int ThumbnailUpload::uploadThumbnailImage()
 		releaseResources();
 		return ret;
 	}
+
+#ifdef _HAS_DING_
+        if(thumbnailUpload ->m_dingNotif)
+        {
+                clock_gettime(CLOCK_REALTIME, &currTime);
+                tnStartTime = currTime;
+                dingtouploadDuration = (currTime.tv_sec - thumbnailUpload ->m_dingTime.tv_sec)*1000 + ( currTime.tv_nsec - thumbnailUpload ->m_dingTime.tv_nsec)/1000000;
+                RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Time from ding to start of thumbnail creation is %ld\n", __FILE__, __LINE__, dingtouploadDuration);
+
+        }
+#endif
 
 #ifdef SUPPORT_IMAGETOOLS
 	/* Generate thumbnail image using imagetool(OpenCV) utility */
@@ -1029,7 +1049,6 @@ int ThumbnailUpload::uploadThumbnailImage()
 #else
 	/* Generate thumbnail image using snapshooter utility */
 	//snprintf(cmd,sizeof(cmd)-1, "snapshooter -f %s %s >/dev/null 2>/dev/null", gcpThumbnailSnapshotPath, gcpSnapshooterOpt);
-
 	//ret_jpeg = system(cmd);
          ret_jpeg = v_secure_system("snapshooter -f %s %s >/dev/null 2>/dev/null", gcpThumbnailSnapshotPath, gcpSnapshooterOpt);
 	if(-1 == ret_jpeg)
@@ -1060,6 +1079,9 @@ int ThumbnailUpload::uploadThumbnailImage()
 	}
 #ifdef _HAS_DING_
         if(thumbnailUpload ->m_dingNotif) {
+            clock_gettime(CLOCK_REALTIME, &currTime);
+            tncreationDuration = (currTime.tv_sec - tnStartTime.tv_sec)*1000 + ( currTime.tv_nsec - tnStartTime.tv_nsec)/1000000;
+            RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Time for thumbnail creation is %ld\n", __FILE__, __LINE__, tncreationDuration);
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Triggering Ding thumbnail upload\n", __FILE__, __LINE__);
             m_ding->uploadDingThumbnail();
         }
@@ -1116,12 +1138,13 @@ int ThumbnailUpload::uploadThumbnailImage()
 #ifdef _HAS_DING_	
 	if(thumbnailUpload ->m_dingNotif)
 	{
-            stringifyEventDateTime(dTnTStamp, sizeof(dTnTStamp), thumbnailUpload ->m_dingTime);
+            stringifyEventDateTime(dTnTStamp, sizeof(dTnTStamp), thumbnailUpload ->m_dingTime.tv_sec);
+	    sprintf(dTnTStampmilliseconds,"%s.%luZ",dTnTStamp,((thumbnailUpload ->m_dingTime.tv_nsec)/1000000));
             memset(pack_head, 0, sizeof(pack_head));
             http_client->addHeader( "X-EVENT-TYPE", "ding");
-            snprintf(pack_head, sizeof(pack_head), "%s", dTnTStamp);
+            snprintf(pack_head, sizeof(pack_head), "%s", dTnTStampmilliseconds);
             http_client->addHeader( "X-EVENT-DATETIME", pack_head);
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Ding: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStamp);
+            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Ding: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStampmilliseconds);
 	}	
 #endif
 	/* Send file to server */
@@ -1135,7 +1158,7 @@ int ThumbnailUpload::uploadThumbnailImage()
 #ifdef _HAS_DING_
 		if(thumbnailUpload ->m_dingNotif)
 		{
-                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to ding is successful with header X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStamp);
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Live thumbnail corresponding to ding is successful with header X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStampmilliseconds);
                 }
 #endif
 	}
@@ -1144,7 +1167,7 @@ int ThumbnailUpload::uploadThumbnailImage()
 #ifdef _HAS_DING_
 		if(thumbnailUpload ->m_dingNotif)
                 {
-                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to ding failed.\n",__FUNCTION__,__LINE__);
+                        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Live thumbnail corresponding to ding failed.\n",__FUNCTION__,__LINE__);
                 }
 #endif
 	}
@@ -1222,13 +1245,12 @@ void ThumbnailUpload::onDingNotification(rtMessageHeader const* hdr, uint8_t con
         memset (&currTime, 0, sizeof(struct timespec));
         clock_gettime(CLOCK_REALTIME, &currTime);
 
-        if((currTime.tv_sec - thumbnailUpload ->m_dingTime) >= thumbnailUpload->m_ding->getQuiteTime())
+        if((currTime.tv_sec - thumbnailUpload ->m_dingTime.tv_sec) >= thumbnailUpload->m_ding->getQuiteTime())
         {
-           thumbnailUpload ->m_dingTime = currTime.tv_sec;
+           thumbnailUpload ->m_dingTime = currTime;
            thumbnailUpload -> m_dingNotif = true;
-           thumbnailUpload->m_ding->signalDing(true,thumbnailUpload ->m_dingTime);
 	   thumbnailUpload->setUploadStatus(true);
-
+           thumbnailUpload->m_ding->signalDing(true,thumbnailUpload ->m_dingTime);
         }
         else {
            RDK_LOG(RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","(%s):%d Within quiet time, skip Ding notification. Curr time: %ld prev ding notification time: %ld\n", __FUNCTION__, __LINE__, currTime.tv_sec, thumbnailUpload ->m_dingTime);
@@ -1289,7 +1311,6 @@ void* ThumbnailUpload::rtMessage_Receive(void* arg)
 void *ThumbnailUpload::doTNUpload()
 {
 	time_t start_upload_time = 0;
-	time_t start_active_time = 0;
 	time_t current_time = 0;
 	time_t waitingInterval = 0;
 	time_t durationLeft = 0;
@@ -1302,73 +1323,36 @@ void *ThumbnailUpload::doTNUpload()
 	{
 		//Getting Upload Attribute
 		ThumbnailUpload::getTNUploadInstance()->getTNUploadAttr();
-		#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
+#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
         	current_time = getCurrentTime(NULL);
-		#else
+#else
         	current_time = sc_linear_time(NULL);
-		#endif
+#endif
 		if((0 != start_upload_time) && ((tn_upload_interval + start_upload_time) > current_time))
 		{
 			waitingInterval = ((tn_upload_interval + start_upload_time) - current_time);
 			durationLeft = waitingInterval;
 			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Wait till next upload interval, waiting for %d secs\n",__FILE__, __LINE__,waitingInterval);
-			if (true == isActiveInterval)
-			{
-				if(0 != start_upload_time)
-				{
-					#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI)
-        				start_active_time = getCurrentTime(NULL);
-					#else
-        				start_active_time = sc_linear_time(NULL);
-					#endif
-					while(0 < durationLeft)
+                        if (true == isActiveInterval)
+		        {
+			     if(0 != start_upload_time)
+			     {
+                                if(NULL != ThumbnailUpload::getTNUploadInstance())
+                                {
+					if(RDKC_SUCCESS != ThumbnailUpload::getTNUploadInstance()->updateActiveUploadDuration())
 					{
-						if(NULL != ThumbnailUpload::getTNUploadInstance())
-						{
-							if (true == isActiveInterval)
-							{
-								if(RDKC_SUCCESS != ThumbnailUpload::getTNUploadInstance()->updateActiveUploadDuration())
-								{
-									RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Failed to update active upload duration..\n", __FILE__, __LINE__);
-								}
-							}
-							else
-							{
-								RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d):Breaking, Active Upload Duration completed.\n",__FILE__, __LINE__);
-								start_active_time = 0;
-								break;
-							}
-						}
-						sleep(1);
-						#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
-                                        	current_time = getCurrentTime(NULL);
-                                        	#else
-                                        	current_time = sc_linear_time(NULL);
-                                        	#endif
-
-						durationLeft = waitingInterval + start_active_time - current_time;
-					}
-
-					if(0 != durationLeft)
-					{
-						durationLeft = 0;
-						continue;
+						RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Failed to update active upload duration..\n", __FILE__, __LINE__);
 					}
 				}
-			}
-			else
-			{
-				bool isTimedOut = thumbnailUpload->waitFor(waitingInterval);
-                        	//Upon ding we need to process the motion notification immediatley
-                        	if(!isTimedOut)
-                        	{
-                                	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Ding or Active suration set!!!  need to send thumbnail immediatly \n", __FILE__, __LINE__);
-                        	}
-
-				//Sleep with passive interval
-				//sleep(waitingInterval);
-			}
-		}
+                             }
+                        }
+                        bool isTimedOut = thumbnailUpload->waitFor(waitingInterval);
+                        //Upon ding we need to process the motion notification immediatley
+                        if(!isTimedOut)
+                        {
+                             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Ding or Active suration set!!!  need to send thumbnail immediatly \n", __FILE__, __LINE__);
+                        }
+	        }
 
 		if(term_flag) {
 			break;
@@ -1392,11 +1376,11 @@ void *ThumbnailUpload::doTNUpload()
 	
 			/*Uploading the Thumbnail Image*/
 			do {
-				#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
+#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
                 		upload_start_time = getCurrentTime(NULL);
-                		#else
+#else
                 		upload_start_time = sc_linear_time(NULL);
-                		#endif
+#endif
 				
 				if (TN_UPLOAD_OK != thumbnailUpload->uploadThumbnailImage())
 				{
@@ -1427,23 +1411,23 @@ void *ThumbnailUpload::doTNUpload()
 					uploadRetryCount++;
 
 					// break if "total upload time" including all the retries exceeds the current "upload interval"
-					#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
+#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
 					if( ((getCurrentTime(NULL) - start_upload_time) >= tn_upload_interval) || (uploadRetryCount > MAX_UPLOAD_RETRY) ) {
                                                 break;
                                         }
 
-					#else
+#else
 					if( ((sc_linear_time(NULL) - start_upload_time) >= tn_upload_interval) || (uploadRetryCount > MAX_UPLOAD_RETRY) ) {
 						break;
 					}
-					#endif
+#endif
 
 					// calculate the time taken for the failed upload
-					#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI)
+#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI)
 					time_for_upload = getCurrentTime(NULL) - upload_start_time;
-					#else
+#else
 					time_for_upload = sc_linear_time(NULL) - upload_start_time;
-					#endif
+#endif
 					// Retry should happen for the leftover time
 					if( (time_for_upload < 0) ||  (time_for_upload >= MAX_RETRY_SLEEP) ) {
 						RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Retry Happens after 0 seconds\n",__FILE__, __LINE__);	
@@ -1458,11 +1442,11 @@ void *ThumbnailUpload::doTNUpload()
 					uploadRetryCount = 0;
 					break;
 				}
-			#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
+#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
 			} while( (uploadRetryCount <= MAX_UPLOAD_RETRY) && ((getCurrentTime(NULL) - start_upload_time) < tn_upload_interval) );
-			#else
+#else
 			} while( (uploadRetryCount <= MAX_UPLOAD_RETRY) && ((sc_linear_time(NULL) - start_upload_time) < tn_upload_interval) );
-			#endif
+#endif
 			//Reset the retry count
 			uploadRetryCount = 0;
 		}
@@ -1471,15 +1455,6 @@ void *ThumbnailUpload::doTNUpload()
 			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Upload is disable!\n", __FILE__, __LINE__);
 			thumbnailUpload->releaseResources();
 		}
-
-		if(true == isActiveInterval)
-                {
-			#if defined ( OSI ) || defined ( THUMBNAIL_PLATFORM_RPI )
-			start_active_time = getCurrentTime(NULL);
-			#else
-			start_active_time = sc_linear_time(NULL);
-			#endif
-                }
 	}
 
 	return NULL;
