@@ -65,6 +65,7 @@ extern "C" {
 
 #ifdef _HAS_DING_
 #include "DingNotification.h"
+#include "RdkCVAImageTools.h"
 #endif
 
 /* RtMessage */
@@ -115,7 +116,7 @@ extern "C" {
 
 #define RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC			"RDKC.ENABLE_DYNAMIC_LOG"
 #define RTMSG_THUMBNAIL_TOPIC				"RDKC.THUMBNAIL"
-
+#define BUFFER_ID 1
 int getCameraImageName(char *out);
 int getCameraVersionNum(char *out);
 
@@ -197,6 +198,7 @@ private:
         bool m_dingNotif;
         struct timespec m_dingTime;
         static void onDingNotification(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+	ImageTools *m_imageTool;
 #endif
 
 };

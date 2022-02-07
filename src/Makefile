@@ -29,6 +29,9 @@ USE_SYSUTILS = yes
 USE_LIBSYSWRAPPER =yes
 USE_BREAKPAD = yes
 USE_MISC = yes
+ifeq ($(XCAM_MODEL), XHB1)
+USE_CONSUMER = yes
+endif
 
 include ${RDK_PROJECT_ROOT_PATH}/utility/AppsRule.mak
 
@@ -42,7 +45,20 @@ CFLAGS += -DUSE_MFRLIB
 CFLAGS += -D_HAS_DING_
 CFLAGS += -DOSI
 CFLAGS += -DXHB1
-CFLAGS  += -I../ding
+ENABLE_DIRECT_FRAME_READ := true
+ifeq ($(ENABLE_XSTREAMER), true)
+$(info( '*************XSTREAMER ENABLED**************')
+CFLAGS  += -D_HAS_XSTREAM_
+ifeq ($(ENABLE_DIRECT_FRAME_READ), true)
+$(info( '*************DIRECT READ FRAME ENABLED**************')
+CFLAGS   += -D_DIRECT_FRAME_READ_
+endif
+endif
+
+CFLAGS  += -I../ding -I../../video-analytics/imagetools/
+LIBFLAGS += -L$(RDK_PROJECT_ROOT_PATH)/video-analytics/imagetools/ -limagetools
+LIBFLAGS += -L$(RDK_PROJECT_ROOT_PATH)/opensource/lib  -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs
+LIBFLAGS += -Wl,-rpath-link=$(PROJ_ROOT)/vendor/img/fs/shadow_root/usr/lib
 SRCS += ../ding/DingNotification.cpp
 endif
 ifeq ($(XCAM_MODEL), XHC3)

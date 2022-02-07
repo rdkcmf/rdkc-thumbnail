@@ -37,6 +37,7 @@ int DingNotification::waitInterval = 1 ;
 
 DingNotification::DingNotification():
 				m_httpClient(NULL),
+				m_tnHttpClient(NULL),
 				m_uploadReady(false),
                                 m_DingTNuploadStatus(false),
 				m_quiteTime(DEFAULT_QUITE_TIME),
@@ -73,6 +74,11 @@ DingNotification::~DingNotification()
 	m_httpClient->close();
 	delete m_httpClient;
    }
+   if(m_tnHttpClient)
+   {
+	m_tnHttpClient->close();
+        delete m_tnHttpClient;
+   }
 }
 /** @description: creates the instance for DingNotification
  *  @param[in] void
@@ -95,6 +101,7 @@ void DingNotification::init(char* modelName,char* mac,char* firmware)
    snprintf(m_modelName, sizeof(m_modelName), "%s",modelName);	
    snprintf(m_firmwareName, sizeof(m_firmwareName), "%s",firmware);	
    m_httpClient = new HttpClient(); 
+   m_tnHttpClient = new HttpClient(); 
    //Initialize upload routine
    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Creating Ding Notification upload thread.\n", __FUNCTION__, __LINE__);
    std::thread uploadDingNotifThread(monitorDingNotification);
@@ -321,24 +328,24 @@ void DingNotification::sendDingNotification()
 	clock_gettime(CLOCK_REALTIME, &currTime);
 
 	/* Add Header */
-        m_httpClient->resetHeaderList();
-        m_httpClient->addHeader( "Expect", "");   //removing expect header condition by explicitly setting Expect header to ""
+        m_Instance->m_httpClient->resetHeaderList();
+        m_Instance->m_httpClient->addHeader( "Expect", "");   //removing expect header condition by explicitly setting Expect header to ""
         memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "%s", m_dingNotifAuthCode);
-        m_httpClient->addHeader( "Authorization", packHead);
-        m_httpClient->addHeader( "X-EVENT-TYPE", "ding");
+        m_Instance->m_httpClient->addHeader( "Authorization", packHead);
+        m_Instance->m_httpClient->addHeader( "X-EVENT-TYPE", "ding");
 	//memset(packHead, 0, sizeof(packHead));
         //snprintf(packHead, sizeof(packHead), "application/json");
         //m_httpClient->addHeader( "Content-Type", packHead);
         memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "Sercomm %s %s %s", m_modelName, m_firmwareName, m_macAddress);
-        m_httpClient->addHeader( "User-Agent", packHead);
+        m_Instance->m_httpClient->addHeader( "User-Agent", packHead);
         memset(packHead, 0, sizeof(packHead));
 	snprintf(packHead, sizeof(packHead), "%s", dingTmilliseconds);
-        m_httpClient->addHeader( "X-EVENT-DATETIME", packHead);
+        m_Instance->m_httpClient->addHeader( "X-EVENT-DATETIME", packHead);
 	memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "%d",0);
-        m_httpClient->addHeader( "Content-Length", packHead);
+        m_Instance->m_httpClient->addHeader( "Content-Length", packHead);
 	RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.BUTTONMGR","%s(%d):Posting Ding notification to  %s \n", __FILE__, __LINE__,m_dingNotifUploadURL );
 	curlCode =  m_httpClient->post(m_dingNotifUploadURL, data, &response_code);
         if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)){	
@@ -439,8 +446,8 @@ void  DingNotification::uploadSnapShot()
                 ptr += read_len;
                 memset(read_buf,0,UPLOAD_DATA_LEN);
         }
-	if (NULL != m_Instance->m_httpClient) {
-         	m_Instance->m_httpClient->open(m_Instance->m_snapShotUploadURL,m_Instance->m_dnsCacheTimeout);
+	if (NULL != m_Instance->m_tnHttpClient) {
+         	m_Instance->m_tnHttpClient->open(m_Instance->m_snapShotUploadURL,m_Instance->m_dnsCacheTimeout);
     	} 
 	else 
 	{
@@ -450,24 +457,24 @@ void  DingNotification::uploadSnapShot()
 	stringifyDateTime(dingT,sizeof(dingT),m_dingTime.tv_sec);
         sprintf(dingTmilliseconds,"%s.%luZ",dingT,((m_dingTime.tv_nsec)/1000000));
         RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.BUTTONMGR","%s(%d): uploadSnapShot: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dingTmilliseconds);
-	m_httpClient->resetHeaderList();
-        m_httpClient->addHeader( "Expect", "");   //removing expect header condition by explicitly setting Expect header to ""
-        m_httpClient->addHeader( "X-EVENT-TYPE", "ding");
+	m_Instance->m_tnHttpClient->resetHeaderList();
+        m_Instance->m_tnHttpClient->addHeader( "Expect", "");   //removing expect header condition by explicitly setting Expect header to ""
+        m_Instance->m_tnHttpClient->addHeader( "X-EVENT-TYPE", "ding");
         memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "%s", m_snapShotAuthCode);
-        m_httpClient->addHeader( "Authorization", packHead);
+        m_Instance->m_tnHttpClient->addHeader( "Authorization", packHead);
         memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "image/jpeg");
-        m_httpClient->addHeader( "Content-Type", packHead);
+        m_Instance->m_tnHttpClient->addHeader( "Content-Type", packHead);
         memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "Sercomm %s %s %s", m_modelName, m_firmwareName, m_macAddress);
-        m_httpClient->addHeader( "User-Agent", packHead);
+        m_Instance->m_tnHttpClient->addHeader( "User-Agent", packHead);
         memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "%s", dingTmilliseconds);
-        m_httpClient->addHeader( "X-EVENT-DATETIME", packHead);
+        m_Instance->m_tnHttpClient->addHeader( "X-EVENT-DATETIME", packHead);
         memset(packHead, 0, sizeof(packHead));
         snprintf(packHead, sizeof(packHead), "%d",file_len);
-        m_httpClient->addHeader( "Content-Length", packHead);
+        m_Instance->m_tnHttpClient->addHeader( "Content-Length", packHead);
 
         kvs_provision_info_t * cvrConfig = (kvs_provision_info_t*)malloc (sizeof(kvs_provision_info_t));
         if(cvrConfig)
@@ -487,7 +494,7 @@ void  DingNotification::uploadSnapShot()
         {
                 snprintf(packHead, sizeof(packHead), "OFF");
         }
-        m_httpClient->addHeader("X-VIDEO-RECORDING", packHead);
+        m_Instance->m_tnHttpClient->addHeader("X-VIDEO-RECORDING", packHead);
 
 	clock_gettime(CLOCK_REALTIME, &startTime);
 
@@ -504,7 +511,7 @@ void  DingNotification::uploadSnapShot()
         	}
 
 		/*Uploading the file */
-                curlCode =  m_httpClient->post_binary(m_Instance->m_snapShotUploadURL,(char*)data, &response_code, file_len);
+                curlCode =  m_Instance->m_tnHttpClient->post_binary(m_Instance->m_snapShotUploadURL,(char*)data, &response_code, file_len);
   		clock_gettime(CLOCK_REALTIME, &currTime);
                 uploadDuration = (currTime.tv_sec - startTime.tv_sec)*1000 + ( currTime.tv_nsec - startTime.tv_nsec)/1000000;
 
@@ -546,8 +553,8 @@ void  DingNotification::uploadSnapShot()
         close(file_fd);
         m_DingTNuploadStatus = true;
 
-	if (NULL != m_Instance->m_httpClient) {
-                m_Instance->m_httpClient->close();
+	if (NULL != m_Instance->m_tnHttpClient) {
+                m_Instance->m_tnHttpClient->close();
 	}
 	return;
 }

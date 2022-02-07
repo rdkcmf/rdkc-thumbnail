@@ -67,7 +67,7 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 #ifdef _HAS_DING_
                                 , m_ding(NULL)
 			  	, m_dingNotif(false)
-
+				, m_imageTool(NULL)
 #endif
 {
 #ifdef _HAS_DING_
@@ -278,6 +278,13 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
 #ifdef _HAS_DING_
         m_ding = DingNotification::getInstance();
         m_ding->init(modelName,mac_string,fw_name);
+        m_imageTool = new ImageTools();
+        
+	if( NULL != m_imageTool) {
+          	if( RDKC_SUCCESS != m_imageTool->Init(BUFFER_ID) ) {
+                        	RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): RdkC Snapshooter Initializationt failed\n",__FUNCTION__, __LINE__);
+                }
+	}	
 #endif
 }
 
@@ -311,7 +318,13 @@ ThumbnailUpload::~ThumbnailUpload()
 		free(liveCacheConf);
 		liveCacheConf = NULL;
 	}
- 
+ #ifdef _HAS_DING_
+	if(NULL != m_imageTool)
+	{
+		delete m_imageTool;
+		m_imageTool = NULL;
+	}
+#endif
 	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): ThumbnailUpload destructor \n", __FILE__, __LINE__);
 }
 
@@ -1024,18 +1037,32 @@ int ThumbnailUpload::uploadThumbnailImage()
 		return ret;
 	}
 
+#ifdef SUPPORT_IMAGETOOLS
 #ifdef _HAS_DING_
-        if(thumbnailUpload ->m_dingNotif)
+
+	if(thumbnailUpload ->m_dingNotif)
         {
                 clock_gettime(CLOCK_REALTIME, &currTime);
                 tnStartTime = currTime;
                 dingtouploadDuration = (currTime.tv_sec - thumbnailUpload ->m_dingTime.tv_sec)*1000 + ( currTime.tv_nsec - thumbnailUpload ->m_dingTime.tv_nsec)/1000000;
                 RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Time from ding to start of thumbnail creation is %ld\n", __FILE__, __LINE__, dingtouploadDuration);
-
         }
-#endif
+        if( NULL != m_imageTool) {
+             //rdkc_snapshooter %s %d %d %d", SNAPSHOT_FILE, COMPRESSION_SCALE, tn_width, tn_height
+             std::string snapshot_filename = SNAPSHOT_FILE; /* snapshot_image_name_with_full_path */
+             int compression_scale = COMPRESSION_SCALE;  /* compression_scale. range 0 - 100 */
+             int new_width = TN_OP_WIDTH_4_3;      /* desired width of the output image */
+             int new_height = TN_OP_HEIGHT_4_3;     /* desired height of the output image */
 
-#ifdef SUPPORT_IMAGETOOLS
+             if( RDKC_SUCCESS != m_imageTool->GenerateSnapshot(snapshot_filename, compression_scale, new_width, new_height) ) {
+                       RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Image creation failed\n", __FUNCTION__, __LINE__);
+             }
+             else {
+                      RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Image creation success\n", __FUNCTION__, __LINE__ );
+             }
+        }
+#else
+
 	/* Generate thumbnail image using imagetool(OpenCV) utility */
 	ret_jpeg = system(cmd);
 	if(-1 == ret_jpeg)
@@ -1045,7 +1072,7 @@ int ThumbnailUpload::uploadThumbnailImage()
                 releaseResources();
                 return ret;
         }
-
+#endif
 #else
 	/* Generate thumbnail image using snapshooter utility */
 	//snprintf(cmd,sizeof(cmd)-1, "snapshooter -f %s %s >/dev/null 2>/dev/null", gcpThumbnailSnapshotPath, gcpSnapshooterOpt);
@@ -1249,8 +1276,8 @@ void ThumbnailUpload::onDingNotification(rtMessageHeader const* hdr, uint8_t con
         {
            thumbnailUpload ->m_dingTime = currTime;
            thumbnailUpload -> m_dingNotif = true;
+	   thumbnailUpload->m_ding->signalDing(true,thumbnailUpload ->m_dingTime);
 	   thumbnailUpload->setUploadStatus(true);
-           thumbnailUpload->m_ding->signalDing(true,thumbnailUpload ->m_dingTime);
         }
         else {
            RDK_LOG(RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","(%s):%d Within quiet time, skip Ding notification. Curr time: %ld prev ding notification time: %ld\n", __FUNCTION__, __LINE__, currTime.tv_sec, thumbnailUpload ->m_dingTime);

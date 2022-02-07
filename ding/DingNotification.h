@@ -62,6 +62,7 @@ class DingNotification
                 static void uploadDingSnapShot();
 
  		HttpClient* m_httpClient;
+ 		HttpClient* m_tnHttpClient;
 		std::mutex m_dingMutex;
 		std::condition_variable m_cv;
 		int m_dnsCacheTimeout;
