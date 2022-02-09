@@ -1915,7 +1915,6 @@ void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t bounding
         smartThInst -> ofData.maxBboxObjYUVFrame = smartThInst -> curr_frame.clone();
     } else {
 #endif
-    std::unique_lock<std::mutex> lock(smartThInst->QMutex);
 #ifdef _HAS_XSTREAM_
     smartThInst -> hres_y_height = smartThInst -> frameInfo->height;
     smartThInst -> hres_y_width = smartThInst -> frameInfo-> width;
@@ -1944,7 +1943,6 @@ void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t bounding
     smartThInst -> ofData.maxBboxObjYUVFrame = cv::Mat(smartThInst -> hres_frame_info -> height + (smartThInst -> hres_frame_info -> height)/2, smartThInst -> hres_frame_info -> width, CV_8UC1, hres_yuvData).clone();
 #endif
 
-    lock.unlock();
 #ifdef ENABLE_TEST_HARNESS
     }
 #endif

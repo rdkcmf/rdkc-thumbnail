@@ -176,10 +176,10 @@ int main(int argc, char** argv)
 #endif
 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail Upload is ready.\n", __FILE__, __LINE__);
 
-	while (true) {
+	//Notify start status 
+	smTnInstance-> notify("start");
 
-		//Notify start status 
-		smTnInstance-> notify("start");
+	while (true) {
 
 		//clock the start time
 		memset(&startTime, 0, sizeof(startTime));
