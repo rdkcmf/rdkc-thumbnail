@@ -1,21 +1,10 @@
 #ifdef _OBJ_DETECTION_
-
-#if 0
-#include <iostream>
-
-#include <atomic>
-#include<opencv2/core.hpp>
-#include<opencv2/videoio.hpp>
-#include<opencv2/imgcodecs.hpp>
-#include<opencv2/imgproc/imgproc.hpp>
-#endif
-//#include "mpipe_port.h"
 #include "smart_thumbnail.h"
 #define CROPPING_WIDTH 848
 #define CROPPING_HEIGHT 480
 
 extern SmartThumbnail *smTnInstance;
-static int isMotionFilter = 0;
+static int isMotionFilter;
 
 int mpipe_port_initialize(const std::string &input_video_path, int &width, int &height) {
   std::cout << "rdkc PORT Initialize the camera" << std::endl;
@@ -39,6 +28,7 @@ cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<s
     cv_frame = cv::Mat(smTnInstance ->curr_frame.rows, smTnInstance ->curr_frame.cols, CV_8UC3);
     cv::cvtColor(smTnInstance ->curr_frame, cv_frame, cv::COLOR_BGR2RGB);
     smTnInstance -> detectionTstamp = smTnInstance -> currTstamp;
+    std::unique_lock<std::mutex> lock(smTnInstance -> hres_data_lock);
 #else
 
     if(isMotionFilter && !smTnInstance -> waitForNextMotionFrame()) return cv_frame;
@@ -66,7 +56,6 @@ cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<s
 
     cv::Mat next_frame = cv::Mat(smTnInstance -> frameInfo -> height + (smTnInstance -> frameInfo -> height)/2, smTnInstance -> frameInfo -> width, CV_8UC1, smTnInstance -> mpipe_hres_yuvData);
 
-    lock.unlock();
 
     cv_frame = cv::Mat(next_frame.rows, next_frame.cols, CV_8UC3);
     cv::cvtColor(next_frame, cv_frame, cv::COLOR_YUV2RGB_NV12/*cv::COLOR_BGR2RGB*/);
@@ -107,22 +96,28 @@ cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<s
     cropRegion.push_back(cv::Point(allignedCenter.x + (cropSize.width/2), allignedCenter.y +(cropSize.height / 2)));
     cropRegion.push_back(cv::Point(allignedCenter.x + (cropSize.width/2), allignedCenter.y -(cropSize.height / 2)));
     if(!roiRegion.empty()) {
-        roiCoords = std::move(smTnInstance->getPolygonInCroppedRegion(roiRegion,cropRegion));
+        roiCoords = smTnInstance->getPolygonInCroppedRegion(roiRegion,cropRegion);
     }
 
     smTnInstance -> printPolygonCoords("Relative ROI", roiCoords);
 
-    motionblobs.clear();
     for(int i = 0; i < UPPER_LIMIT_BLOB_BB; i++) {
         if(smTnInstance->currentMotionBlobs[i].boundingBoxXOrd == INVALID_BBOX_ORD) break;
-        std::vector<cv::Point> motionblob, relativeMotionBlob;
+
+        std::vector<cv::Point> motionblob;
         motionblob.push_back(cv::Point(smTnInstance->currentMotionBlobs[i].boundingBoxXOrd / scaleFactor, smTnInstance->currentMotionBlobs[i].boundingBoxYOrd / scaleFactor));
         motionblob.push_back(cv::Point((smTnInstance->currentMotionBlobs[i].boundingBoxXOrd + smTnInstance->currentMotionBlobs[i].boundingBoxWidth) / scaleFactor, smTnInstance->currentMotionBlobs[i].boundingBoxYOrd / scaleFactor));
         motionblob.push_back(cv::Point((smTnInstance->currentMotionBlobs[i].boundingBoxXOrd + smTnInstance->currentMotionBlobs[i].boundingBoxWidth) / scaleFactor, (smTnInstance->currentMotionBlobs[i].boundingBoxYOrd + smTnInstance->currentMotionBlobs[i].boundingBoxHeight) / scaleFactor));
         motionblob.push_back(cv::Point(smTnInstance->currentMotionBlobs[i].boundingBoxXOrd / scaleFactor, (smTnInstance->currentMotionBlobs[i].boundingBoxYOrd + smTnInstance->currentMotionBlobs[i].boundingBoxHeight) / scaleFactor));
 
-        motionblobs.push_back(std::move(smTnInstance->getPolygonInCroppedRegion(motionblob, cropRegion)));
+        motionblobs.push_back(smTnInstance->getPolygonInCroppedRegion(motionblob, cropRegion));
     }
+
+    lock.unlock();
+
+    //Clearing
+    cropRegion.clear();
+    roiRegion.clear();
 
     for(int i = 0; i < motionblobs.size(); i++) {
         char str[CONFIG_STRING_MAX] = {};
@@ -152,20 +147,11 @@ void loadDetectionConfig(DetectionConfig *config, char *configFile)
 {
     FileUtils m_settings;
 
-    config->input_video_path = DEFAULT_INPUT_DEV;
-    config->delivery_detection_graph_path = DEFAULT_GRAPH_PATH;
 #ifdef ENABLE_TEST_HARNESS
     config->frame_read_delay = "0";
-#else
-    config->frame_read_delay = DEFAULT_FRAME_READ_DELAY;
 #endif
-    config->max_num_frames_cached_for_delivery_detection = DEFAULT_MAX_FRAMES_CACHED_FOR_DELIVERY_DETECTION;
-    config->delivery_detection_model_min_score_threshold = DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD;
-    config->delivery_detection_min_score_threshold = DEFAULT_DELIVERY_DETECTION_MIN_SCORE_THRESHOLD;
-    config->frame_count_to_process = DEFAULT_FRAME_COUNT_TO_PROCESS;
-    config->roi_filter = "1";
-    config->motion_cue_filter = "0";
-    std::string motionFilterStatus = "0";
+
+    std::string motionFilterStatus = DEFAULT_MOTION_FILTER_ENABLE;
     
     if(!m_settings.loadFromFile(std::string(configFile))) {
         RDK_LOG(RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Loading detection config file failed, loading default settings\n", __FILE__, __LINE__);
@@ -173,6 +159,7 @@ void loadDetectionConfig(DetectionConfig *config, char *configFile)
     {
         m_settings.get("input_video_path", config->input_video_path);
         m_settings.get("delivery_detection_graph_path", config->delivery_detection_graph_path);
+        m_settings.get("delivery_detection_model_path", config->delivery_detection_model_path);
         m_settings.get("frame_read_delay", config->frame_read_delay);
         m_settings.get("max_num_frames_cached_for_delivery_detection", config->max_num_frames_cached_for_delivery_detection);
         m_settings.get("delivery_detection_model_min_score_threshold", config->delivery_detection_model_min_score_threshold);
@@ -181,6 +168,7 @@ void loadDetectionConfig(DetectionConfig *config, char *configFile)
         m_settings.get("roi_filter", config->roi_filter);
         m_settings.get("motion_cue_filter", config->motion_cue_filter);
         m_settings.get("motion_filter", motionFilterStatus);
+        m_settings.get("size_filter_threshold", config->size_filter_threshold);
     }
     isMotionFilter = std::stoi(motionFilterStatus);
 }
@@ -188,36 +176,23 @@ void loadDetectionConfig(DetectionConfig *config, char *configFile)
 void mpipe_port_term() {
 }
 
-void *__mpipe_thread_main__() {
+void *__mpipe_thread_main__(DetectionConfig config) {
   std::string argv0 = __FUNCTION__;
-
-  DetectionConfig config;
 
   loadDetectionConfig(&config, DETECTION_CONFIG_FILE);
   std::string argv1 = "--input_video_path=\"" + config.input_video_path + "\"";
   std::string argv2 = "--delivery_detection_graph_path=" + config.delivery_detection_graph_path;
-//  std::string argv2 = "--graph_path=/etc/mediapipe/graphs/rdk/delivery_detection/g_person_detection_rdkc_live_cpu.pbtxt";
-  std::string argv3 = "--frame_read_delay=" + config.frame_read_delay;
-  std::string argv4 = "--max_num_frames_cached_for_delivery_detection=" + config.max_num_frames_cached_for_delivery_detection;
-  std::string argv5 = "--delivery_detection_model_min_score_threshold=" + config.delivery_detection_model_min_score_threshold;
-  std::string argv6 = "--delivery_detection_min_score_threshold=" + config.delivery_detection_min_score_threshold;
-  std::string argv7 = "--frame_count_to_process=" + config.frame_count_to_process;
-  std::string argv8 = "--roi_filter=" + config.roi_filter;
-  std::string argv9 = "--motion_cue_filter=" + config.motion_cue_filter;
+  std::string argv3 = "--delivery_detection_model_path=" + config.delivery_detection_model_path;
+  std::string argv4 = "--frame_read_delay=" + config.frame_read_delay;
+  std::string argv5 = "--max_num_frames_cached_for_delivery_detection=" + config.max_num_frames_cached_for_delivery_detection;
+  std::string argv6 = "--delivery_detection_model_min_score_threshold=" + config.delivery_detection_model_min_score_threshold;
+  std::string argv7 = "--delivery_detection_min_score_threshold=" + config.delivery_detection_min_score_threshold;
+  std::string argv8 = "--frame_count_to_process=" + config.frame_count_to_process;
+  std::string argv9 = "--roi_filter=" + config.roi_filter;
+  std::string argv10 = "--motion_cue_filter=" + config.motion_cue_filter;
+  std::string argv11 = "--size_filter_threshold=" + config.size_filter_threshold;
 
-
-  std::vector<char> vargv0(argv0.begin(), argv0.end());
-  std::vector<char> vargv1(argv1.begin(), argv1.end());
-  std::vector<char> vargv2(argv2.begin(), argv2.end());
-  std::vector<char> vargv3(argv3.begin(), argv3.end());
-  std::vector<char> vargv4(argv4.begin(), argv4.end());
-  std::vector<char> vargv5(argv5.begin(), argv5.end());
-  std::vector<char> vargv6(argv6.begin(), argv6.end());
-  std::vector<char> vargv7(argv7.begin(), argv7.end());
-  std::vector<char> vargv8(argv8.begin(), argv8.end());
-  std::vector<char> vargv9(argv9.begin(), argv9.end());
-
-  const char *argv[] = { argv0.c_str(), argv1.c_str(), argv2.c_str(), argv3.c_str(), argv4.c_str(), argv5.c_str(), argv6.c_str(), argv7.c_str(), argv8.c_str(), argv9.c_str() };
+  const char *argv[] = { argv0.c_str(), argv1.c_str(), argv2.c_str(), argv3.c_str(), argv4.c_str(), argv5.c_str(), argv6.c_str(), argv7.c_str(), argv8.c_str(), argv9.c_str(), argv10.c_str(), argv11.c_str() };
 
   extern int __mpipe_main__(int, char **);
   __mpipe_main__(sizeof(argv)/sizeof(argv[0]), (char **)argv);

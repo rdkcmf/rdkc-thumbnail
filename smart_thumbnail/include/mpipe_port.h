@@ -17,7 +17,21 @@ typedef struct DetectionResult_ {
   int maxAugScore;
 } DetectionResult;
 
-void *__mpipe_thread_main__();
+typedef struct detection_config_ {
+    std::string input_video_path;
+    std::string delivery_detection_graph_path;
+    std::string delivery_detection_model_path;
+    std::string frame_read_delay;
+    std::string max_num_frames_cached_for_delivery_detection;
+    std::string delivery_detection_model_min_score_threshold;
+    std::string delivery_detection_min_score_threshold;
+    std::string frame_count_to_process;
+    std::string roi_filter;
+    std::string motion_cue_filter;
+    std::string size_filter_threshold;
+}DetectionConfig;
+
+void *__mpipe_thread_main__(DetectionConfig config);
 
 /* open the device in the given path. The 'width and height' is the resolution that
  * mpipe desires. If the camera does not support, the camera's resolution is updated
@@ -26,7 +40,7 @@ int mpipe_port_initialize(const std::string &input_video_path, int &width, int &
 int mpipe_port_initialize(int &width, int &height);
 
 /* get next frame, in COLOR_RGB format */
-cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords);
+cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionblobs);
 void mpipe_port_term();
 
 

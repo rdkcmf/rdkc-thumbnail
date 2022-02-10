@@ -80,7 +80,20 @@ int main(int argc, char** argv)
 	memset(&currTime, 0, sizeof(currTime));
 	memset(&prevTime, 0, sizeof(prevTime));
 	int itr =0;
+#ifdef _OBJ_DETECTION_
         int isDetectionEnabled = 0;
+        DetectionConfig detectionAttr = { DEFAULT_INPUT_DEV,
+                                          DEFAULT_GRAPH_PATH,
+					  DEFAULT_DELIVERY_MODEL_PATH,
+                                          DEFAULT_FRAME_READ_DELAY,
+                                          DEFAULT_MAX_FRAMES_CACHED_FOR_DELIVERY_DETECTION,
+                                          DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD,
+                                          DEFAULT_DELIVERY_DETECTION_MIN_SCORE_THRESHOLD,
+                                          DEFAULT_FRAME_COUNT_TO_PROCESS,
+                                          DEFAULT_ROI_FILTER_ENABLE,
+                                          DEFAULT_MOTION_CUE_FILTER_ENABLE,
+					  DEFAULT_SIZE_FILTER_THRESHOLD};
+#endif
 
 	/* Registering callback function for Breakpadwrap Function */
 #ifdef BREAKPAD
@@ -130,6 +143,7 @@ int main(int argc, char** argv)
                         }
                 }
 
+#ifdef _OBJ_DETECTION_
                 if(strcmp(argv[itr],"--detectionEnabled")==0)
                 {
                         itr++;
@@ -143,6 +157,63 @@ int main(int argc, char** argv)
                                 break;
                         }
                 }
+
+                if(strcmp(argv[itr],"--detectionModel")==0)
+                {
+                        itr++;
+
+                        if (itr < argc)
+                        {
+                                detectionAttr.delivery_detection_model_path = argv[itr];
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+
+                if(strcmp(argv[itr],"--detectionModelThreshold")==0)
+                {
+                        itr++;
+
+                        if (itr < argc)
+                        {
+                                detectionAttr.delivery_detection_model_min_score_threshold = argv[itr];
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+
+                if(strcmp(argv[itr],"--delivery_motion_cue_filter_enabled")==0)
+                {
+                        itr++;
+
+                        if (itr < argc)
+                        {
+				detectionAttr.motion_cue_filter = argv[itr];
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+
+                if(strcmp(argv[itr],"--person_size_filter_threshold")==0)
+                {
+                        itr++;
+
+                        if (itr < argc)
+                        {
+				detectionAttr.size_filter_threshold = argv[itr];
+                        }
+                        else
+                        {
+                                break;
+                        }
+                }
+#endif
                 itr++;
     	}
 
@@ -159,7 +230,11 @@ int main(int argc, char** argv)
 	}
 
 	//initialize smart thumbnail
-	status = smTnInstance-> init(param,cvrEnabled, isDetectionEnabled);
+#ifdef _OBJ_DETECTION_
+	status = smTnInstance-> init(param,cvrEnabled, isDetectionEnabled, detectionAttr);
+#else
+	status = smTnInstance-> init(param,cvrEnabled);
+#endif
 	if (STH_ERROR == status) {
     	    RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Error creating Smart thumbnail instance.\n", __FILE__, __LINE__);
 	    return STH_ERROR;

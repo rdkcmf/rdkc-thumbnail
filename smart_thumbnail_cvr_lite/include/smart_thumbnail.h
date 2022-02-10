@@ -143,24 +143,22 @@ extern "C" {
 #ifdef _OBJ_DETECTION_
 #define DEFAULT_INPUT_DEV "/dev/video0"
 #define DEFAULT_GRAPH_PATH "/etc/mediapipe/graphs/rdk/delivery_detection/g_delivery_detection_cpu.pbtxt"
+#define DEFAULT_DELIVERY_MODEL_PATH "/etc/mediapipe/models/xcv-delivery-detection-224x224-v2.1.0.tflite"
 #define DEFAULT_FRAME_READ_DELAY "1000"
 #define DEFAULT_MAX_FRAMES_CACHED_FOR_DELIVERY_DETECTION "5"
 #define DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD "0.8"
 #define DEFAULT_DELIVERY_DETECTION_MIN_SCORE_THRESHOLD "1"
 #define DETECTION_CONFIG_FILE "/opt/usr_config/detection_attr.conf"
 #define DEFAULT_FRAME_COUNT_TO_PROCESS "5"
-
-typedef struct detection_config_ {
-    std::string input_video_path;
-    std::string delivery_detection_graph_path;
-    std::string frame_read_delay;
-    std::string max_num_frames_cached_for_delivery_detection;
-    std::string delivery_detection_model_min_score_threshold;
-    std::string delivery_detection_min_score_threshold;
-    std::string frame_count_to_process;
-    std::string roi_filter;
-    std::string motion_cue_filter;
-}DetectionConfig;
+#define DEFAULT_ROI_FILTER_ENABLE "1"
+#define DEFAULT_MOTION_FILTER_ENABLE "0"
+#define DEFAULT_MOTION_CUE_FILTER_ENABLE "0"
+#define DEFAULT_SIZE_FILTER_THRESHOLD "50"
+#define REQUEST_RECOVERY_FILE "/tmp/.stn_recovery_needed"
+#define RECOVERY_TIME_THRESHOLD 60
+#ifdef ENABLE_TEST_HARNESS
+#define CVR_CLIP_END 1
+#endif
 #endif
 
 typedef enum {
@@ -208,7 +206,11 @@ class SmartThumbnail
     public:
 	static SmartThumbnail* getInstance();
 	//Initialize the buffers and starts msg monitoring, upload thread.
-	STH_STATUS init(char* mac,bool isCVREnabled, bool isDetectionEnabled);
+#ifdef _OBJ_DETECTION_
+	STH_STATUS init(char* mac,bool isCVREnabled, bool isDetectionEnabled, DetectionConfig detectionConfig);
+#else
+	STH_STATUS init(char* mac,bool isCVREnabled);
+#endif
         //get upload status
         bool getUploadStatus();
         //set upload status
@@ -270,9 +272,9 @@ class SmartThumbnail
         static void onMsgROIChanged(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	void printPolygonCoords(const char * str, std::vector<cv::Point>& polygon);
         void printROI();
-#endif
 #ifdef ENABLE_TEST_HARNESS
         static void onClipStatus(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+#endif
 #endif
 
 	//Updates object frame
