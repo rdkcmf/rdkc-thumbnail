@@ -352,6 +352,7 @@ class SmartThumbnail
         int mpipeProcessedframes;
         char currDetectionSTNFname[CONFIG_STRING_MAX];
         std::vector<double> roi;
+        bool detectionHang;
 #ifdef ENABLE_TEST_HARNESS
         bool testHarnessOnFileFeed;
         std::vector<cv::Mat> yuvPlanes, yuvChannels;

@@ -270,6 +270,7 @@ SmartThumbnail::SmartThumbnail():
 				detectionCompleted(false),
 				mpipe_hres_yuvData(NULL),
 				detectionInProgress(false),
+				detectionHang(false),
 #endif
         debugBlob(false),
         debugBlobOnFullFrame(false)
@@ -1098,14 +1099,19 @@ bool SmartThumbnail::getDetectionStatus()
 
     {
 	std::unique_lock<std::mutex> lock(detectionMutex);
-	cv.wait(lock, [this] {return (detectionCompleted || termFlag);});
+	//cv.wait(lock, [this] {return (detectionCompleted || termFlag);});
+	cv.wait_for(lock, std::chrono::minutes(1) ,[this] {return (detectionCompleted || termFlag);});
 
-	if(!termFlag) {
+	if(detectionCompleted) {
 	    RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due detectionCompleted flag!!\n",__FUNCTION__,__LINE__);
 	    status = detectionCompleted;
 	    detectionCompleted = false;
-    	} else {
+        } else if(termFlag) {
 	    RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due term flag!!\n",__FUNCTION__,__LINE__);
+	    status = false;
+    	} else {
+	    RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due to timeout, detected delivery detection hang!!\n",__FUNCTION__,__LINE__);
+	    detectionHang = true;
 	    status = false;
 	}
 
@@ -1579,6 +1585,7 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
 #ifdef _OBJ_DETECTION_
         if(smartThInst->detectionInProgress) {
             smartThInst->setClipEnd(true);
+#if 0
 #ifndef ENABLE_TEST_HARNESS
             struct timeval now;
             gettimeofday(&now, NULL);
@@ -1586,6 +1593,7 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
 		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d Hang detected in mediapipe, triggering recovery.\n", __FUNCTION__, __LINE__);
 	        std::ofstream output(REQUEST_RECOVERY_FILE);
             }
+#endif
 #endif
             cv::Mat emptyMat;
             mpipe_port_onLastFrameEvent(emptyMat, 0, 0);
@@ -2457,8 +2465,12 @@ void SmartThumbnail::uploadPayload()
                 RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Waiting for detection to finish\n", __FUNCTION__, __LINE__);
                 struct timeval start, end;
                 gettimeofday(&start, NULL);
-                if((!strcmp(currDetectionSTNFname, payload.fname)) && (smartThInst->getDetectionStatus())) {
+                bool detectionStatus = true;
+                if((!strcmp(currDetectionSTNFname, payload.fname)) && (detectionStatus = smartThInst->getDetectionStatus())) {
                     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection completed\n", __FUNCTION__, __LINE__);
+                } else if(detectionStatus == false) {
+                    RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection not completed!... Adding empty detection result to payload\n", __FUNCTION__, __LINE__);
+                    json_object_set_new(payload.detectionResult, "tags", json_array());
                 }
 
 	        if((!payload.deliveryDetected) && ((payload.motionTime - smartThInst->stnUploadTime) < smartThInst->event_quiet_time))
@@ -2656,6 +2668,15 @@ void SmartThumbnail::uploadPayload()
 	//unlink (uploadFname);
 	delSTN(sTnUploadFpath);
 #endif
+
+#ifdef _OBJ_DETECTION_
+        if(detectionHang) {
+            RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection hang detected. Triggering recovery\n", __FUNCTION__, __LINE__);
+            //Trigger hang recovery
+	    std::ofstream output(REQUEST_RECOVERY_FILE);
+        }
+#endif
+
 }
 
 

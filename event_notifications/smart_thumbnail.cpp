@@ -168,14 +168,15 @@ void SmartThumbnail::onCompletedDeliveryDetection(const DetectionResult &result)
 }
 
 std::vector<cv::Point> SmartThumbnail::getPolygonInCroppedRegion(std::vector<cv::Point> polygon, std::vector<cv::Point> croppedRegion) {
-	std::vector<cv::Point> instersectArea, relativeArea;
+	std::vector<cv::Point> instersectArea = {}, relativeArea = {};
 	/* Get the intersection of polygon and Cropping region */
 	float intersection = cv::intersectConvexConvex(croppedRegion, polygon, relativeArea);
 
 	RDK_LOG(RDK_LOG_DEBUG ,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) intersection area = %f\n", __FILE__, __LINE__, intersection);
 
 	if(intersection <= 0) {
-		relativeArea = std::move(polygon);
+		relativeArea.clear();
+		relativeArea = polygon;
 	}
 	for(int i = 0; i < relativeArea.size(); i++) {
 		int x = std::max(0, relativeArea[i].x - croppedRegion[0].x);
@@ -183,6 +184,7 @@ std::vector<cv::Point> SmartThumbnail::getPolygonInCroppedRegion(std::vector<cv:
 		instersectArea.push_back(cv::Point(x,y));
 	} 
 
+	relativeArea.clear();
 	return instersectArea;
 }
 
@@ -276,13 +278,12 @@ SmartThumbnail::SmartThumbnail():
 #ifndef _OBJ_DETECTION_
 				eventquietTimeStart(0),
 #else
-#ifdef ENABLE_TEST_HARNESS
 				clipEnd(false),
-#endif
 				eventquietTimeStart(0),
 				detectionCompleted(false),
 				mpipe_hres_yuvData(NULL),
 				detectionInProgress(false),
+				detectionHang(false),
 #endif
 
 				debugBlob(false),
@@ -356,7 +357,11 @@ SmartThumbnail *SmartThumbnail::getInstance()
  *  @param[in] void
  *  @return: STH_SUCCESS on success, STH_ERROR otherwise
  */
-STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,int stnondelayTime,bool isDetectionEnabled)
+#ifdef _OBJ_DETECTION_
+STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,int stnondelayTime,bool isDetectionEnabled, DetectionConfig detectionConfig)
+#else
+STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,int stnondelayTime)
+#endif
 {
 
 #if defined(LEGACY_CFG_MGR) || defined(ENABLE_TEST_HARNESS)
@@ -521,7 +526,7 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,i
 		stnUploadInterval = DELIVERY_STN_UPLOAD_INTERVAL;
 		//Initialize delivery detection thread
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Creating delivery detection thread.\n", __FUNCTION__, __LINE__);
-		std::thread deliveryDetectionThread(__mpipe_thread_main__);
+		std::thread deliveryDetectionThread(__mpipe_thread_main__, detectionConfig);
 		deliveryDetectionThread.detach();
 
 		mpipe_port_setOnDetectionChanged(callback_func);
@@ -1159,15 +1164,20 @@ bool SmartThumbnail::getDetectionStatus()
 
 	{
 		std::unique_lock<std::mutex> lock(detectionMutex);
-		cv.wait(lock, [this] {return (detectionCompleted || termFlag);});
+		cv.wait_for(lock, std::chrono::minutes(1) ,[this] {return (detectionCompleted || termFlag);});
 
-		if(!termFlag) {
+		if(detectionCompleted) {
 			RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due detectionCompleted flag!!\n",__FUNCTION__,__LINE__);
 			status = detectionCompleted;
 			detectionCompleted = false;
 		}
-		else {
+		else if(termFlag) {
 			RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due term flag!!\n",__FUNCTION__,__LINE__);
+			status = false;
+		}
+		else {
+			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Wait over due to timeout, detected delivery detection hang!!\n",__FUNCTION__,__LINE__);
+			detectionHang = true;
 			status = false;
 		}
 
@@ -1279,10 +1289,12 @@ cv::Point2f SmartThumbnail::alignCentroid(cv::Point2f orgCenter, cv::Mat origFra
 	pts.x = adjustedXfinal;
 	pts.y = adjustedYfinal;
 
+#if 0
 	std::cout << "\n\n Original Center { " << orgCenter.x << ", " << orgCenter.y << " } " << "Alligned Center: { " << adjustedXfinal << ", " << adjustedYfinal << " } \n";
 	std::cout << " Cropping Resolution {W, H}:  { " << cropSize.width << ", " << cropSize.height << " } " << "Original frame Resolution {W, H}: { " << origFrame.cols << ", " << origFrame.rows << " } \n";
 	std::cout << " Intermediate Adjustments {shiftX, adjustedX, shiftXleft}: { " << shiftX << ", " << adjustedX << ", " << shiftXleft << " } \n";
 	std::cout << " Intermediate Adjustments {shiftY, adjustedY, shiftYdown}: { " << shiftY << ", " << adjustedY << ", " << shiftYdown << " } \n\n";
+#endif
 
 	return pts;
 }
@@ -1706,6 +1718,14 @@ void SmartThumbnail::OnClipGenEnd(const char * cvrClipFname)
 #ifdef _OBJ_DETECTION_
 	if(smartThInst->detectionInProgress) {
 		smartThInst->setClipEnd(true);
+#ifndef ENABLE_TEST_HARNESS
+            struct timeval now;
+            gettimeofday(&now, NULL);
+            if((now.tv_sec - smartThInst->detectionStartTime.tv_sec) > RECOVERY_TIME_THRESHOLD) {
+		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d Hang detected in mediapipe, triggering recovery.\n", __FUNCTION__, __LINE__);
+	        std::ofstream output(REQUEST_RECOVERY_FILE);
+            }
+#endif
 		cv::Mat emptyMat;
 		mpipe_port_onLastFrameEvent(emptyMat, 0, 0);
 	}
@@ -2036,7 +2056,7 @@ void SmartThumbnail::printPolygonCoords(const char * str, std::vector<cv::Point>
 			coords += "(" + std::to_string(polygon[i].x) + "," + std::to_string(polygon[i].y) + ")";
 		}
 	}
-	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) %s : %s\n", __FUNCTION__ , __LINE__, str, coords.c_str());
+	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) %s : %s\n", __FUNCTION__ , __LINE__, str, coords.c_str());
 }
 
 /** @description    : Callback function on ROI change.
@@ -2147,7 +2167,8 @@ void SmartThumbnail::ProcessFrameMetadata(SmarttnMetadata_thumb sm, int isInside
 	}
 
 #ifdef _OBJ_DETECTION_
-	if(smartThInst->detectionEnabled && sm.event_type == 4) {
+//	if(smartThInst->detectionEnabled && sm.event_type == 4) {
+		std::unique_lock<std::mutex> lock(smartThInst->hres_data_lock);
 		smartThInst->currentBbox.x = sm.deliveryUnionBox.boundingBoxXOrd;
 		smartThInst->currentBbox.y = sm.deliveryUnionBox.boundingBoxYOrd;
 		smartThInst->currentBbox.width = sm.deliveryUnionBox.boundingBoxWidth;
@@ -2159,11 +2180,14 @@ void SmartThumbnail::ProcessFrameMetadata(SmarttnMetadata_thumb sm, int isInside
 			smartThInst->currentMotionBlobs[i].boundingBoxWidth = sm.objectBoxs[i].boundingBoxWidth;
 			smartThInst->currentMotionBlobs[i].boundingBoxHeight = sm.objectBoxs[i].boundingBoxHeight;
 		}
+		lock.unlock();
+#if 0
 		smartThInst->setMotionFrame(true);
 	}
 	else {
 		smartThInst->setMotionFrame(false);
 	}
+#endif
 #endif
 
 	// if motion is detected update the metadata.
@@ -2579,8 +2603,13 @@ void SmartThumbnail::uploadPayload()
 				RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Waiting for detection to finish\n", __FUNCTION__, __LINE__);
 				struct timeval start, end;
 				gettimeofday(&start, NULL);
-				if((!strcmp(currDetectionSTNFname, payload.fname)) && (smartThInst->getDetectionStatus())) {
+				bool detectionStatus = true;
+				if((!strcmp(currDetectionSTNFname, payload.fname)) && (detectionStatus = smartThInst->getDetectionStatus())) {
 					RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection completed\n", __FUNCTION__, __LINE__);
+				}
+				else if(detectionStatus == false) {
+					RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection not completed!... Adding empty detection result to payload\n", __FUNCTION__, __LINE__);
+					json_object_set_new(payload.detectionResult, "tags", json_array());
 				}
 
 				if((!payload.deliveryDetected) && ((payload.motionTime - smartThInst->stnUploadTime) < smartThInst->event_quiet_time)) {
@@ -2796,6 +2825,13 @@ void SmartThumbnail::uploadPayload()
 
 	//unlink (uploadFname);
 	delSTN(sTnUploadFpath);
+#endif
+#ifdef _OBJ_DETECTION_
+	if(detectionHang) {
+		RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection hang detected. Triggering recovery\n", __FUNCTION__, __LINE__);
+		//Trigger hang recovery
+		std::ofstream output(REQUEST_RECOVERY_FILE);
+	}
 #endif
 
 }
