@@ -976,14 +976,12 @@ STH_STATUS SmartThumbnail::createPayload()
 #endif
                 smartThInst -> setUploadStatus(true);
 	    ret = STH_SUCCESS;
-#ifndef _OBJ_DETECTION_
         } else if (ignoreMotion == true) { // payload is not available due to event quiet interval
             // clock the current time
             memset(&currTime, 0, sizeof(currTime));
             clock_gettime(CLOCK_REALTIME, &currTime);
 
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr time %ld prev motion upload time %ld\n", __FILE__, __LINE__, currTime.tv_sec, smartThInst->prev_time);
-#endif
     	} else {
     	    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Nothing to upload.\n", __FILE__, __LINE__);
 	    ret = STH_NO_PAYLOAD;
@@ -2022,11 +2020,16 @@ void SmartThumbnail::waitForDeliveryResult()
     }
 
 }
+#endif
 
 bool SmartThumbnail::checkForQuietTime()
 {
     //Check for event quiet time if this thumbnail is not a delivery
+#ifdef _OBJ_DETECTION_
     if((!STNList.back().deliveryDetected) && ((STNList.back().motionTime - smartThInst->prev_time) < smartThInst->event_quiet_time))
+#else
+    if((STNList.back().motionTime - smartThInst->prev_time) < smartThInst->event_quiet_time)
+#endif
     {
         RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr motion time %ld prev motion upload time %ld\n", __FILE__, __LINE__, STNList.back().motionTime, smartThInst->prev_time);
         return true;
@@ -2035,8 +2038,6 @@ bool SmartThumbnail::checkForQuietTime()
         return false;
     }
 }
-
-#endif
 
 void SmartThumbnail::triggerUpload()
 {
@@ -2047,15 +2048,15 @@ void SmartThumbnail::triggerUpload()
 
 #ifdef _OBJ_DETECTION_
         if(smartThInst -> detectionEnabled) {
-
             waitForDeliveryResult();
-
-            if(checkForQuietTime()) {
-                delAllSTN();
-                return;
-            }
+        }
+#endif
+        if(checkForQuietTime()) {
+            delAllSTN();
+            return;
         }
 
+#ifdef _OBJ_DETECTION_
         //Check if the current entry for upload is a delivery
         if(STNList.back().deliveryDetected) {
             isUploadingDelivery = true;

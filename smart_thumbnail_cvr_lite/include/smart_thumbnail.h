@@ -290,6 +290,7 @@ class SmartThumbnail
 	static void receiveRtmessage();
 	//Callback function for dynamic logging.
 	static void dynLogOnMessage(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+	bool checkForQuietTime();
 #ifdef _OBJ_DETECTION_
 	STH_STATUS updateUploadPayload(char * fname, DetectionResult result);
         json_t* createJSONFromDetectionResult(DetectionResult result);
@@ -297,7 +298,6 @@ class SmartThumbnail
 	STH_STATUS setDeliveryDetectionCompleted(bool status);
         bool checkForDeliveryInCache();
         void waitForDeliveryResult();
-        bool checkForQuietTime();
         bool updateCacheWithLatestDelivery();
 #ifdef ENABLE_TEST_HARNESS
 	void waitForNextDetectionFrame();
