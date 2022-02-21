@@ -291,7 +291,7 @@ void DingNotification::sendDingNotification()
     memset(&startTime, 0, sizeof(startTime));
     memset(&currTime, 0, sizeof(currTime));
     stringifyDateTime(dingT,sizeof(dingT),m_dingTime.tv_sec);
-    sprintf(dingTmilliseconds,"%s.%luZ",dingT,((m_dingTime.tv_nsec)/1000000));
+    sprintf(dingTmilliseconds,"%s.%03luZ",dingT,((m_dingTime.tv_nsec)/1000000));
     RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.BUTTONMGR","%s(%d): sendDingNotification: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dingTmilliseconds);
     /* Open the URL */
     if (NULL != m_Instance->m_httpClient) {

@@ -1139,7 +1139,7 @@ int ThumbnailUpload::uploadThumbnailImage()
 	if(thumbnailUpload ->m_dingNotif)
 	{
             stringifyEventDateTime(dTnTStamp, sizeof(dTnTStamp), thumbnailUpload ->m_dingTime.tv_sec);
-	    sprintf(dTnTStampmilliseconds,"%s.%luZ",dTnTStamp,((thumbnailUpload ->m_dingTime.tv_nsec)/1000000));
+	    sprintf(dTnTStampmilliseconds,"%s.%03luZ",dTnTStamp,((thumbnailUpload ->m_dingTime.tv_nsec)/1000000));
             memset(pack_head, 0, sizeof(pack_head));
             http_client->addHeader( "X-EVENT-TYPE", "ding");
             snprintf(pack_head, sizeof(pack_head), "%s", dTnTStampmilliseconds);
