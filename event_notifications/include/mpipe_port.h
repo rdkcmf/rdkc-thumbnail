@@ -19,6 +19,7 @@ typedef struct DetectionResult_ {
 
 	float deliveryScore;
 	int maxAugScore;
+	int motion_frame_count;
 
 } DetectionResult;
 

@@ -174,7 +174,7 @@ void SmartThumbnail::onCompletedDeliveryDetection(const DetectionResult &result)
     if(result.deliveryScore < 0) {
         RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Delivery detection failed\n", __FUNCTION__, __LINE__);
     }
-    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection Stats:%0.2f,%d,%d,0,%d,%0.2lf,%0.2lf\n", __FUNCTION__, __LINE__, result.deliveryScore, result.maxAugScore, result.personScores.size(), mpipeProcessedframes, time_taken, time_waited);
+    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection Stats:%0.2f,%d,%d,0,%d,%0.2lf,%0.2lf,%d\n", __FUNCTION__, __LINE__, result.deliveryScore, result.maxAugScore, result.personScores.size(), mpipeProcessedframes, time_taken, time_waited, result.motion_frame_count);
 
 #ifdef ENABLE_TEST_HARNESS
     smartThInst->notifyXvision(result, 0, mpipeProcessedframes, time_taken, time_waited);

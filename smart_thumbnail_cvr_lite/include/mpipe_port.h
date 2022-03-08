@@ -15,6 +15,7 @@ typedef struct DetectionResult_ {
   std::vector<float> nonROIPersonScores;
   float deliveryScore;
   int maxAugScore;
+  int motion_frame_count;
 } DetectionResult;
 
 typedef struct detection_config_ {
