@@ -143,7 +143,7 @@ extern "C" {
 #ifdef _OBJ_DETECTION_
 #define DEFAULT_INPUT_DEV "/dev/video0"
 #define DEFAULT_GRAPH_PATH "/etc/mediapipe/graphs/rdk/delivery_detection/g_delivery_detection_cpu.pbtxt"
-#define DEFAULT_DELIVERY_MODEL_PATH "/etc/mediapipe/models/xcv-delivery-detection-224x224-v2.1.0.tflite"
+#define DEFAULT_DELIVERY_MODEL_PATH "/etc/mediapipe/models/xcv-delivery-detection-224x224-v2.2.0.tflite"
 #define DEFAULT_FRAME_READ_DELAY "1000"
 #define DEFAULT_MAX_FRAMES_CACHED_FOR_DELIVERY_DETECTION "5"
 #define DEFAULT_DELIVERY_DETECTION_MODEL_MIN_SCORE_THRESHOLD "0.8"
