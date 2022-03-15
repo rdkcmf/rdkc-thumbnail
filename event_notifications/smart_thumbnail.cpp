@@ -2027,7 +2027,7 @@ void SmartThumbnail::CaptureFrame(uint64_t lResFramePTS)
 void SmartThumbnail::printROI()
 {
 	if(roi.empty()) {
-		RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) ROI in not set.\n", __FUNCTION__ , __LINE__);
+		RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) ROI is not set.\n", __FUNCTION__ , __LINE__);
 	}
 	else {
 		std::string roiCoords = "";

@@ -132,9 +132,9 @@ cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<s
 	}
 
 
-	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d)The motion blob in the frame is : x = %d, y = %d, w = %d, h = %d\n", __FILE__, __LINE__, smTnInstance -> currentBbox.x, smTnInstance -> currentBbox.y, smTnInstance -> currentBbox.width, smTnInstance -> currentBbox.height);
-	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d)Cropped Frame center [x = %f, y = %f].\n", __FILE__, __LINE__, allignedCenter.x, allignedCenter.y);
-	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d)Cropped Frame coordinates [x = %f, y = %f].\n", __FILE__, __LINE__, allignedCenter.x - (cropSize.width / 2), allignedCenter.y - (cropSize.height / 2));
+	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d)The motion blob in the frame is : x = %d, y = %d, w = %d, h = %d\n", __FILE__, __LINE__, smTnInstance -> currentBbox.x, smTnInstance -> currentBbox.y, smTnInstance -> currentBbox.width, smTnInstance -> currentBbox.height);
+	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d)Cropped Frame center [x = %f, y = %f].\n", __FILE__, __LINE__, allignedCenter.x, allignedCenter.y);
+	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d)Cropped Frame coordinates [x = %f, y = %f].\n", __FILE__, __LINE__, allignedCenter.x - (cropSize.width / 2), allignedCenter.y - (cropSize.height / 2));
 
 	uint8_t *camera_buf = new uint8_t [cropSize.height * cropSize.width * 3];
 	memcpy(camera_buf, croppedObj.data, cropSize.height*cropSize.width * 3);
