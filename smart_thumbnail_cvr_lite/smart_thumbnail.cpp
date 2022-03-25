@@ -828,7 +828,7 @@ STH_STATUS SmartThumbnail::delSTN(char* fname)
                 RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Caching %s file for reference\n", __FUNCTION__ , __LINE__, fname);
             }
 #ifdef _OBJ_DETECTION_
-           // json_decref((*it).detectionResult);
+            json_decref((*it).detectionResult);
 #endif
             STNList.erase(it);
             break;
@@ -857,6 +857,9 @@ STH_STATUS SmartThumbnail::delAllSTN()
         else {
             RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Caching %s file for reference\n", __FUNCTION__ , __LINE__, STNList[cnt].fname);
         }
+#ifdef _OBJ_DETECTION_
+	json_decref(STNList[cnt].detectionResult);
+#endif
     }
 
     STNList.clear();
@@ -1094,9 +1097,9 @@ STH_STATUS SmartThumbnail::createPayload()
 }
 
 #ifdef _OBJ_DETECTION_
-json_t* SmartThumbnail::createJSONFromDetectionResult(DetectionResult result)
+void SmartThumbnail::createJSONFromDetectionResult(DetectionResult result, json_t* &resultJson)
 {
-    json_t* resultJson = json_object();
+    resultJson = json_object();
     json_t* tags_array = json_array();
     std::ostringstream statStringStream;
 
@@ -1121,7 +1124,6 @@ json_t* SmartThumbnail::createJSONFromDetectionResult(DetectionResult result)
     std::string personStat = statStringStream.str();
     RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Person Stats:%s\n", __FUNCTION__ , __LINE__, personStat.c_str());
     json_object_set_new(resultJson,"tags", tags_array);
-    return resultJson;
 }
 
 STH_STATUS SmartThumbnail::updateUploadPayload(char * fname, DetectionResult result)
@@ -1129,13 +1131,14 @@ STH_STATUS SmartThumbnail::updateUploadPayload(char * fname, DetectionResult res
     STH_STATUS ret = STH_NO_PAYLOAD;
 
     //Create JSON object with detection result
-    json_t* root = createJSONFromDetectionResult(result);
+    json_t* root;
+    createJSONFromDetectionResult(result, root);
 
     //Add the JSON object in the STN payload
     std::unique_lock<std::mutex> lock(smartThInst -> QMutex);
     for (std::vector<STHPayload>::iterator it = STNList.begin(); it != STNList.end(); ++it) {
         if(!strcmp((*it).fname, fname)){
-            (*it).detectionResult = json_copy(root);
+            (*it).detectionResult = root;
             if(result.deliveryScore > 0) {
                 (*it).deliveryDetected = true;
             }
@@ -2203,6 +2206,7 @@ void SmartThumbnail::waitForDeliveryResult()
         RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection completed\n", __FUNCTION__, __LINE__);
     } else if(detectionStatus == false) {
         RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection not completed!... Adding empty detection result to payload\n", __FUNCTION__, __LINE__);
+        payload.detectionResult = json_object();
         json_object_set_new(payload.detectionResult, "tags", json_array());
     }
 }
@@ -2564,9 +2568,6 @@ STH_STATUS SmartThumbnail::uploadPayload()
         if(smartThInst -> detectionEnabled) {
             jsonStr = json_dumps(currPayload.detectionResult, 0);
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): X-IMAGE-METADATA: %s\n", __FUNCTION__, __LINE__, jsonStr);
-            if(jsonStr == NULL) {
-                jsonStr = "{\"tags\": []}";
-            }
             memset(encodedBuff, 0, sizeof(encodedBuff));
             b64_encode((uint8_t*)jsonStr, strlen(jsonStr), (uint8_t*)encodedBuff);
             RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): encoded X-IMAGE-METADATA: %s\n", __FUNCTION__, __LINE__, (char*)encodedBuff);
@@ -2636,8 +2637,9 @@ STH_STATUS SmartThumbnail::uploadPayload()
 
 #ifdef _OBJ_DETECTION_
     if(smartThInst -> detectionEnabled) {
-        free(jsonStr);
-        json_decref(payload.detectionResult);
+        if(jsonStr) {
+            free(jsonStr);
+        }
     }
 
     if(detectionHang) {

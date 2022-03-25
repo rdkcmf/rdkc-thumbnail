@@ -300,7 +300,7 @@ class SmartThumbnail
 	bool checkForQuietTime();
 #ifdef _OBJ_DETECTION_
 	STH_STATUS updateUploadPayload(char * fname, DetectionResult result);
-        json_t* createJSONFromDetectionResult(DetectionResult result);
+        void createJSONFromDetectionResult(DetectionResult result, json_t * &resultJson);
 	bool getDeliveryDetectionStatus();
 	STH_STATUS setDeliveryDetectionCompleted(bool status);
         bool checkForDeliveryInCache();

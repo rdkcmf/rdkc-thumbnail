@@ -1199,11 +1199,6 @@ STH_STATUS SmartThumbnail::createPayload(char* uploadFname)
 			if(!strcmp((*it).fname, uploadFname)) {
 				memset(&payload, 0 , sizeof(STHPayload));
 				memcpy(&payload, &(*it), sizeof(STHPayload));
-#ifdef _OBJ_DETECTION_
-				if((*it).detectionResult != NULL) {
-					payload.detectionResult = json_copy((*it).detectionResult);
-				}
-#endif
 				ret =  STH_SUCCESS;
 				RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) payload.fname:%s  payload.tstamp :%llu \n", __FUNCTION__ , __LINE__, payload.fname,payload.tstamp);
 				break;
@@ -1216,9 +1211,9 @@ STH_STATUS SmartThumbnail::createPayload(char* uploadFname)
 }
 
 #ifdef _OBJ_DETECTION_
-json_t* SmartThumbnail::createJSONFromDetectionResult(DetectionResult result)
+void SmartThumbnail::createJSONFromDetectionResult(DetectionResult result, json_t* &resultJson)
 {
-	json_t* resultJson = json_object();
+	resultJson = json_object();
 	json_t* tags_array = json_array();
 	std::ostringstream statStringStream;
 
@@ -1246,51 +1241,40 @@ json_t* SmartThumbnail::createJSONFromDetectionResult(DetectionResult result)
 	std::string personStat = statStringStream.str();
 	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Person Stats:%s\n", __FUNCTION__ , __LINE__, personStat.c_str());
 	json_object_set_new(resultJson,"tags", tags_array);
-
-	return resultJson;
 }
 
 STH_STATUS SmartThumbnail::updateUploadPayload(char * fname, DetectionResult result)
 {
 	STH_STATUS ret = STH_NO_PAYLOAD;
 
-	//Create JSON object with detection result
-	//json_t* root = createJSONFromDetectionResult(result);
-
 	//Add the JSON object in the STN payload
 	//std::unique_lock<std::mutex> lock(stnMutex);
 
-	detectionResult = createJSONFromDetectionResult(result);
+	createJSONFromDetectionResult(result, detectionResult);
 
 	if(!strcmp(currSTN.fname, fname)) {
 		if(result.deliveryScore > 0) {
 			currSTN.deliveryDetected = true;
 		}
-		//json_decref(currSTN.detectionResult);
-		currSTN.detectionResult = json_copy(detectionResult);
+		currSTN.detectionResult = detectionResult;
 	}
 
 	if(!strcmp(payload.fname, fname)) {
 		if(result.deliveryScore > 0) {
 			payload.deliveryDetected = true;
 		}
-		//json_decref(payload.detectionResult);
-		payload.detectionResult = json_copy(detectionResult);
+		payload.detectionResult = detectionResult;
 	}
 
 	for (std::vector<STHPayload>::iterator it = STNList.begin(); it != STNList.end(); ++it) {
 		if(!strcmp((*it).fname, fname)) {
-			//json_decref((*it).detectionResult);
-			(*it).detectionResult = json_copy(detectionResult);
+			(*it).detectionResult = detectionResult;
 			if(result.deliveryScore > 0) {
 				(*it).deliveryDetected = true;
 			}
 		}
 	}
     
-	//payload.detectionResult = createJSONFromDetectionResult(result);
-	//json_decref(detectionResult);
-
 	ret =  STH_SUCCESS;
 	RDK_LOG(RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) payload updated with json string\n", __FUNCTION__ , __LINE__);
 
@@ -2716,6 +2700,7 @@ void SmartThumbnail::uploadPayload()
 				}
 				else if(detectionStatus == false) {
 					RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection not completed!... Adding empty detection result to payload\n", __FUNCTION__, __LINE__);
+					payload.detectionResult = json_object();
 					json_object_set_new(payload.detectionResult, "tags", json_array());
 				}
 
@@ -2846,7 +2831,6 @@ void SmartThumbnail::uploadPayload()
 
 #ifdef _OBJ_DETECTION_
 		if(smartThInst -> detectionEnabled) {
-			//char *jsonStr = json_dumps(detectionResult, 0);
 			char *jsonStr = json_dumps(payload.detectionResult, 0);
 			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): X-IMAGE-METADATA: %s\n", __FUNCTION__, __LINE__, jsonStr);
 			//Apply base64 encoding on the metadata
@@ -2854,7 +2838,9 @@ void SmartThumbnail::uploadPayload()
 			b64_encode((uint8_t*)jsonStr, strlen(jsonStr), (uint8_t*)encodedBuff);
 			RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): encoded X-IMAGE-METADATA: %s\n", __FUNCTION__, __LINE__, (char*)encodedBuff);
 			smartThInst->httpClient->addHeader("X-IMAGE-METADATA", encodedBuff);
-			free(jsonStr);
+			if(jsonStr) {
+				free(jsonStr);
+			}
 		}
 #endif
 

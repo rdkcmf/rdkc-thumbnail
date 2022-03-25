@@ -272,7 +272,7 @@ class SmartThumbnail
 	STH_STATUS createPayload(char* uploadFname);
 #ifdef _OBJ_DETECTION_
 	STH_STATUS updateUploadPayload(char * fname, DetectionResult result);
-        json_t* createJSONFromDetectionResult(DetectionResult result);
+        void createJSONFromDetectionResult(DetectionResult result, json_t* &resultJson);
 #endif
 	STH_STATUS getTnUploadConf();
 	STH_STATUS getEventConf();
