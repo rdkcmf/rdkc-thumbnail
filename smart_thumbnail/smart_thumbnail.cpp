@@ -1909,7 +1909,9 @@ void SmartThumbnail::onMsgCvrUpload(rtMessageHeader const* hdr, uint8_t const* b
       cv_frame_rgb.release();
      //mpipe_port_onMotionEvent(false);
 #endif
-            gettimeofday(&(smartThInst -> uploadTriggeredTime), NULL);
+	    if(strcmp(smartThInst->currDetectionSTNFname, smartThInst->uploadFname) == 0) {
+                gettimeofday(&(smartThInst -> uploadTriggeredTime), NULL);
+            }
 #endif
 	} else if (STH_NO_PAYLOAD == createPayloadStatus) {
     		RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d  No payload available for CVR clip:%s.\n", __FUNCTION__, __LINE__, cvrClipFname);

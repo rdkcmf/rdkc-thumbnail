@@ -1899,8 +1899,9 @@ void SmartThumbnail::OnClipUploadSuccess(const char* cvrClipFname)
 		cv_frame_rgb.release();
 		//mpipe_port_onMotionEvent(false);
 #endif
-
-		gettimeofday(&(smartThInst -> uploadTriggeredTime), NULL);
+		if(strcmp(smartThInst->currDetectionSTNFname, smartThInst->uploadFname) == 0) {
+			gettimeofday(&(smartThInst -> uploadTriggeredTime), NULL);
+		}
 
 #endif
 
