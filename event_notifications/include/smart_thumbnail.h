@@ -285,7 +285,7 @@ public:
 #ifdef _OBJ_DETECTION_
 #ifdef ENABLE_TEST_HARNESS
 	void notifyXvision(const DetectionResult &result, double motionTriggeredTime, int mpipeProcessedframes, double time_taken, double time_waited);
-	void waitForNextDetectionFrame();
+	bool waitForNextDetectionFrame();
 #endif
 	bool waitForNextMotionFrame();
 	STH_STATUS setMotionFrame(bool status);

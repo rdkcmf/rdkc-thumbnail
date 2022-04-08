@@ -23,9 +23,9 @@ cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<s
 	std::vector<cv::Point> cropRegion = {}, roiRegion = {};
 
 #ifdef ENABLE_TEST_HARNESS
-	smTnInstance -> waitForNextDetectionFrame();
+	if(!smTnInstance -> waitForNextDetectionFrame()) return cv_frame;
 	if(isMotionFilter && !smTnInstance -> waitForNextMotionFrame()) return cv_frame;
-	if( (smTnInstance -> lastProcessedFrame == smTnInstance -> FrameNum) || (smTnInstance->clipEnd)) return cv_frame;
+	if(smTnInstance -> lastProcessedFrame == smTnInstance -> FrameNum) return cv_frame;
 	smTnInstance -> lastProcessedFrame = smTnInstance -> FrameNum;
 	cv_frame = cv::Mat(smTnInstance ->curr_frame.rows, smTnInstance ->curr_frame.cols, CV_8UC3);
 	cv::cvtColor(smTnInstance ->curr_frame, cv_frame, cv::COLOR_BGR2RGB);

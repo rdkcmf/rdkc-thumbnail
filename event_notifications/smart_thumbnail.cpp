@@ -33,12 +33,19 @@ const int kDOIBitmapDefaultThreshold = 80;
 int SmartThumbnail::waitingInterval = 1 ;
 #ifdef _OBJ_DETECTION_
 #ifdef ENABLE_TEST_HARNESS
-void SmartThumbnail::waitForNextDetectionFrame()
+bool SmartThumbnail::waitForNextDetectionFrame()
 {
+	bool ret = true;
 	std::unique_lock<std::mutex> lock(hres_data_lock);
 	//Check if the currently captured frames is the exact 1sec from after last frame read for delivery detection
 	detectionCv.wait(lock, [this] {return (((lastProcessedFrame != FrameNum) && ((FrameNum - THFrameNum) % fps == 0))|| (detectionTstamp == 0) || clipEnd || termFlag);});
+
+	if(clipEnd || termFlag) {
+		ret = false;
+	}
+
 	lock.unlock();
+	return ret;
 }
 
 void SmartThumbnail::notifyXvision(const DetectionResult &result, double motionTriggeredTime, int mpipeProcessedframes, double time_taken, double time_waited)

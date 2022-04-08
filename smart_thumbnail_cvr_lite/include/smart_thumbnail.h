@@ -307,7 +307,7 @@ class SmartThumbnail
         void waitForDeliveryResult();
         bool updateCacheWithLatestDelivery();
 #ifdef ENABLE_TEST_HARNESS
-	void waitForNextDetectionFrame();
+	bool waitForNextDetectionFrame();
 #endif
 #endif
 

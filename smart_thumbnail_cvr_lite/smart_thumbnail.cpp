@@ -95,11 +95,16 @@ void SmartThumbnail::waitForClipEnd()
     sem_wait(&semSTNUpload);
 }
 
-void SmartThumbnail::waitForNextDetectionFrame()
+bool SmartThumbnail::waitForNextDetectionFrame()
 {
+    bool ret = true;
     std::unique_lock<std::mutex> lock(smartThInst -> QMutex);
     detectionCv.wait(lock, [this] {return (((lastProcessedFrame != FrameNum) && ((FrameNum - THFrameNum) % fps == 0))|| (detectionTstamp == 0) || (clipEnd));});
+    if(clipEnd) {
+        ret = false;
+    }
     lock.unlock();
+    return ret;
 }
 
 void SmartThumbnail::notifyXvision(const DetectionResult &result, double motionTriggeredTime, int mpipeProcessedframes, double time_taken, double time_waited)
