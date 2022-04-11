@@ -455,7 +455,7 @@ void  DingNotification::uploadSnapShot()
         	return;
     	}
 	stringifyDateTime(dingT,sizeof(dingT),m_dingTime.tv_sec);
-        sprintf(dingTmilliseconds,"%s.%luZ",dingT,((m_dingTime.tv_nsec)/1000000));
+        sprintf(dingTmilliseconds,"%s.%03luZ",dingT,((m_dingTime.tv_nsec)/1000000));
         RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.BUTTONMGR","%s(%d): uploadSnapShot: X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dingTmilliseconds);
 	m_Instance->m_tnHttpClient->resetHeaderList();
         m_Instance->m_tnHttpClient->addHeader( "Expect", "");   //removing expect header condition by explicitly setting Expect header to ""
