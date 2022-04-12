@@ -71,19 +71,6 @@ void SmartThumbnail::notifyXvision(const DetectionResult &result, double motionT
         rtMessage_Release(personInfo);
     }
 
-    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.VIDEOANALYTICS","%s(%d) non ROI person count : %d\n", __FILE__,__LINE__, result.nonROIPersonBBoxes.size());
-    for(int i = 0; i < result.nonROIPersonBBoxes.size(); i++) {
-        rtMessage personInfo;
-        rtMessage_Create(&personInfo);
-        rtMessage_SetInt32(personInfo, "boundingBoxXOrd", result.nonROIPersonBBoxes[i][0]);
-        rtMessage_SetInt32(personInfo, "boundingBoxYOrd", result.nonROIPersonBBoxes[i][1]);
-        rtMessage_SetInt32(personInfo, "boundingBoxWidth", result.nonROIPersonBBoxes[i][2]);
-        rtMessage_SetInt32(personInfo, "boundingBoxHeight", result.nonROIPersonBBoxes[i][3]);
-        rtMessage_SetDouble(personInfo, "confidence", result.nonROIPersonScores[i]*100);
-        rtMessage_AddMessage(m, "nonROIPersons", personInfo);
-        rtMessage_Release(personInfo);
-    }
-
     rtError err = rtConnection_SendMessage(connectionSend, m, "RDKC.TESTHARNESS.DELIVERYDATA");
     rtLog_Debug("SendRequest:%s", rtStrError(err));
 
@@ -1804,7 +1791,6 @@ void SmartThumbnail::onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, u
             //save smart thumbnail from memory to file
             if( false == ignoreMotion )
             {
-                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->motionLog);
                 if (DOIEnabled) {
                     STH_STATUS ret = smartThInst->applyDOIonSTN(smartThInst->ofData, smartThInst->DOIBitmap);
                     if (ret == STH_ERROR) {

@@ -73,20 +73,6 @@ void SmartThumbnail::notifyXvision(const DetectionResult &result, double motionT
 		rtMessage_Release(personInfo);
 	}
 
-	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.VIDEOANALYTICS","%s(%d) non ROI person count : %d\n", __FILE__,__LINE__, result.nonROIPersonBBoxes.size());
-
-	for(int i = 0; i < result.nonROIPersonBBoxes.size(); i++) {
-		rtMessage personInfo;
-		rtMessage_Create(&personInfo);
-		rtMessage_SetInt32(personInfo, "boundingBoxXOrd", result.nonROIPersonBBoxes[i][0]);
-		rtMessage_SetInt32(personInfo, "boundingBoxYOrd", result.nonROIPersonBBoxes[i][1]);
-		rtMessage_SetInt32(personInfo, "boundingBoxWidth", result.nonROIPersonBBoxes[i][2]);
-		rtMessage_SetInt32(personInfo, "boundingBoxHeight", result.nonROIPersonBBoxes[i][3]);
-		rtMessage_SetDouble(personInfo, "confidence", result.nonROIPersonScores[i]*100);
-		rtMessage_AddMessage(m, "nonROIPersons", personInfo);
-		rtMessage_Release(personInfo);
-	}
-
 	rtError err = rtConnection_SendMessage(connectionSend, m, "RDKC.TESTHARNESS.DELIVERYDATA");
 	rtLog_Debug("SendRequest:%s", rtStrError(err));
 
@@ -2060,7 +2046,7 @@ void SmartThumbnail::CaptureFrame(uint64_t lResFramePTS)
 	std::string frame_filename;
 	if(smartThInst->testHarnessOnFileFeed) {
 		//Read the frame from file
-		frame_filename = "/tmp/THFrame_" + std::to_string(lResFramePTS) + ".jpg";
+		frame_filename = "/tmp/THFrame_" + std::to_string(lResFramePTS) + ".bmp";
 		RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Reading frame file : %s\n", __FUNCTION__ , __LINE__, frame_filename.c_str());
 		smartThInst->curr_frame = cv::imread(frame_filename, cv::IMREAD_COLOR);
 		unlink(frame_filename.c_str());

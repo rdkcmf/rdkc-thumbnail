@@ -132,18 +132,6 @@ void SmartThumbnail::notifyXvision(const DetectionResult &result, double motionT
         rtMessage_Release(personInfo);
     }
 
-    for(int i = 0; i < result.nonROIPersonBBoxes.size(); i++) {
-        rtMessage personInfo;
-        rtMessage_Create(&personInfo);
-        rtMessage_SetInt32(personInfo, "boundingBoxXOrd", result.nonROIPersonBBoxes[i][0]);
-        rtMessage_SetInt32(personInfo, "boundingBoxYOrd", result.nonROIPersonBBoxes[i][1]);
-        rtMessage_SetInt32(personInfo, "boundingBoxWidth", result.nonROIPersonBBoxes[i][2]);
-        rtMessage_SetInt32(personInfo, "boundingBoxHeight", result.nonROIPersonBBoxes[i][3]);
-        rtMessage_SetDouble(personInfo, "confidence", result.nonROIPersonScores[i]*100);
-        rtMessage_AddMessage(m, "nonROIPersons", personInfo);
-        rtMessage_Release(personInfo);
-    }
-
     rtError err = rtConnection_SendMessage(connectionSend, m, "RDKC.TESTHARNESS.DELIVERYDATA");
     rtLog_Debug("SendRequest:%s", rtStrError(err));
 

@@ -9,10 +9,6 @@ typedef struct DetectionResult_ {
   std::vector<std::vector<int>> personBBoxes;
   /* The detection score of each (n) person detected in the thumbnail */
   std::vector<float> personScores;
-  /* The bounding boxes of each (n) person detected in the thumbnail */
-  std::vector<std::vector<int>> nonROIPersonBBoxes;
-  /* The detection score of each (n) person detected in the thumbnail */
-  std::vector<float> nonROIPersonScores;
   float deliveryScore;
   int maxAugScore;
   int motion_frame_count;
