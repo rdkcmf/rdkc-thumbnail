@@ -2186,7 +2186,8 @@ bool SmartThumbnail::updateCacheWithLatestDelivery()
     auto it = STNList.rbegin();
     auto listEnd = STNList.rbegin();
 
-    for(it++; (*listEnd).deliveryDetected || it != STNList.rend(); it++) {
+    // Swap the last delivery thumbnail with list end.
+    for(it++; !(*listEnd).deliveryDetected && it != STNList.rend(); it++) {
         if ((*it).deliveryDetected) {
             std::swap((*it), (*listEnd));
         }
