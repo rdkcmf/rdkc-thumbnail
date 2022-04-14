@@ -2215,9 +2215,9 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 
 	RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): insideROI:%d\n", __FILE__, __LINE__,isInsideROI);
 
-	rtMessage_Release(m);
-
 	smartThInst -> ProcessFrameMetadata(sm, isInsideROI);
+
+	rtMessage_Release(m);
 }
 
 void SmartThumbnail::ProcessFrameMetadata(SmarttnMetadata_thumb sm, int isInsideROI)
