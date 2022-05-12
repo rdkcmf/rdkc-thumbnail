@@ -4,6 +4,7 @@
 
 #define CROPPING_WIDTH 848
 #define CROPPING_HEIGHT 480
+#define DOI_BITMAP_BINARY_PATH "/opt/usr_config/doi_bitmap-binary.jpg"
 extern SmartThumbnail *smTnInstance;
 static int isMotionFilter;
 
@@ -16,7 +17,7 @@ int mpipe_port_initialize(int &width, int &height) {
   mpipe_port_initialize(std::string(""), width, height);
   return 0;
 }
-cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionblobs) {
+cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionblobs, cv::Mat& doi_bitmap) {
 
     RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) In mpipe_port_getNextFrame.\n", __FUNCTION__ , __LINE__);
     cv::Mat cv_frame, croppedObj;
@@ -124,6 +125,10 @@ cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<s
         smTnInstance -> printPolygonCoords(str, motionblobs[i]);
     }
 
+    if(!smTnInstance -> doi_binary.empty()) {
+        getRectSubPix(smTnInstance -> doi_binary, cropSize, allignedCenter, doi_bitmap);
+    }
+
 #ifdef ENABLE_TEST_HARNESS
     RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Sending %dth frame for detection in %dth file in THlist.\n", __FILE__, __LINE__, smTnInstance -> FrameNum, smTnInstance -> FileNum);
 #endif
@@ -171,6 +176,7 @@ void loadDetectionConfig(DetectionConfig *config, char *configFile)
         m_settings.get("motion_cue_filter", config->motion_cue_filter);
         m_settings.get("motion_filter", motionFilterStatus);
         m_settings.get("size_filter_threshold", config->size_filter_threshold);
+        m_settings.get("doi_filter", config->doi_filter);
     }
     isMotionFilter = std::stoi(motionFilterStatus);
 }
@@ -193,8 +199,9 @@ void *__mpipe_thread_main__(DetectionConfig config) {
   std::string argv9 = "--roi_filter=" + config.roi_filter;
   std::string argv10 = "--motion_cue_filter=" + config.motion_cue_filter;
   std::string argv11 = "--size_filter_threshold=" + config.size_filter_threshold;
+  std::string argv12 = "--doi_filter=" + config.doi_filter;
 
-  const char *argv[] = { argv0.c_str(), argv1.c_str(), argv2.c_str(), argv3.c_str(), argv4.c_str(), argv5.c_str(), argv6.c_str(), argv7.c_str(), argv8.c_str(), argv9.c_str(), argv10.c_str(), argv11.c_str() };
+  const char *argv[] = { argv0.c_str(), argv1.c_str(), argv2.c_str(), argv3.c_str(), argv4.c_str(), argv5.c_str(), argv6.c_str(), argv7.c_str(), argv8.c_str(), argv9.c_str(), argv10.c_str(), argv11.c_str(), argv12.c_str() };
 
   extern int __mpipe_main__(int, char **);
   __mpipe_main__(sizeof(argv)/sizeof(argv[0]), (char**)argv);

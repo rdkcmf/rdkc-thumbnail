@@ -92,7 +92,8 @@ int main(int argc, char** argv)
                                           DEFAULT_FRAME_COUNT_TO_PROCESS,
                                           DEFAULT_ROI_FILTER_ENABLE,
                                           DEFAULT_MOTION_CUE_FILTER_ENABLE,
-					  DEFAULT_SIZE_FILTER_THRESHOLD};
+					  DEFAULT_SIZE_FILTER_THRESHOLD,
+                                          DEFAULT_DOI_FILTER_ENABLE};
 #endif
 
 	/* Registering callback function for Breakpadwrap Function */
@@ -266,13 +267,6 @@ int main(int argc, char** argv)
 			break;
 		}
 #endif		
-                //filter on DOI
-                status = smTnInstance->applyDOIonSTN();
-                if (STH_ERROR == status) {
-                    //isPayloadAvailable is now false, pass thru to createPayload for error handling.
-                    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): smart thumbnail is not in DOI, discard!!!\n", __FILE__, __LINE__);
-                }
-
 		//create payload
 		status = smTnInstance->createPayload();
 		if ( (STH_NO_PAYLOAD == status) ||

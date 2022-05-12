@@ -27,6 +27,7 @@ typedef struct detection_config_ {
     std::string roi_filter;
     std::string motion_cue_filter;
     std::string size_filter_threshold;
+    std::string doi_filter;
 }DetectionConfig;
 
 void *__mpipe_thread_main__(DetectionConfig config);
@@ -38,7 +39,7 @@ int mpipe_port_initialize(const std::string &input_video_path, int &width, int &
 int mpipe_port_initialize(int &width, int &height);
 
 /* get next frame, in COLOR_RGB format */
-cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionblobs);
+cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionblobs, cv::Mat& doi_bitmap);
 void mpipe_port_term();
 
 

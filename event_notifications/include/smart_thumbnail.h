@@ -91,6 +91,10 @@ extern "C" {
 #define YUV_HRES_BUFFER_ID		0
 #define YUV_HRES_FRAME_WIDTH		1280
 #define YUV_HRES_FRAME_HEIGHT		720
+#ifdef XHB1
+#define YUV_MRES_FRAME_WIDTH           640
+#define YUV_MRES_FRAME_HEIGHT          480
+#endif
 
 #ifdef XCAM2
 #define STN_HRES_BUFFER_ID              2
@@ -134,8 +138,6 @@ extern "C" {
 
 #define STN_TRUE                        "true"
 #define STN_FALSE                       "false"
-#define DEFAULT_DOI_BITMAP              "/opt/usr_config/doi_bitmap"
-#define DEFAULT_DOI_BITMAP_BINARY       "/opt/usr_config/doi_bitmap-binary.jpg"
 #define RTMSG_DYNAMIC_LOG_REQ_RES_TOPIC "RDKC.ENABLE_DYNAMIC_LOG"
 
 #define STN_MAX( a, b ) ( ( a > b) ? a : b )
@@ -162,6 +164,7 @@ extern "C" {
 #define DETECTION_CONFIG_FILE                                   "/opt/usr_config/detection_attr.conf"
 #define DEFAULT_FRAME_COUNT_TO_PROCESS 			        "5"
 #define DEFAULT_ROI_FILTER_ENABLE				"1"
+#define DEFAULT_DOI_FILTER_ENABLE				"1"
 #define DEFAULT_MOTION_FILTER_ENABLE				"0"
 #define DEFAULT_MOTION_CUE_FILTER_ENABLE			"0"
 #define DEFAULT_SIZE_FILTER_THRESHOLD				"50"
@@ -298,7 +301,7 @@ public:
 	bool getDetectionStatus();
 	void onCompletedDeliveryDetection(const DetectionResult &result);
 	std::vector<cv::Point> getPolygonInCroppedRegion(std::vector<cv::Point> polygon, std::vector<cv::Point> croppedRegion);
-	friend cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionblobs);
+	friend cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionblobs, cv::Mat& doi_bitmap);
 	friend unsigned char * mpipe_port_getNextFrame(int *h, int *w);
 #endif
 
@@ -307,9 +310,6 @@ public:
 private:
 	SmartThumbnail();
 	~SmartThumbnail();
-	STH_STATUS applyDOIonSTN(const objFrameData& ofData, const cv::Mat &DOIBitmap);
-	STH_STATUS getDOIConf();
-	STH_STATUS applyDOIthreshold(const char* bitmappath, uint8_t threshold);
 	STH_STATUS saveSTN();
 	STH_STATUS addSTN();
 	STH_STATUS checkSTN();
@@ -349,7 +349,7 @@ private:
 	void CaptureFrame(uint64_t lResFramePTS);
 
 	//Process frame metadata received from xvision
-	void ProcessFrameMetadata(SmarttnMetadata_thumb sm, int isInsideROI);
+	void ProcessFrameMetadata(SmarttnMetadata_thumb sm, int motionFlags);
 
 	//On Clip Generation Start
 	void OnClipGenStart(const char * cvrClipFname);
@@ -386,11 +386,11 @@ private:
 	static void onMsgCvr(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	static void onMsgCvrUpload(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	static void onMsgRefresh(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
-	static void onMsgDOIConfRefresh(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	static void dynLogOnMessage(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 
 #ifdef _OBJ_DETECTION_
 	static void onMsgROIChanged(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+	static void onMsgDOIChanged(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	void printPolygonCoords(const char * str, std::vector<cv::Point>& polygon);
 	void printROI();
 #endif
@@ -401,9 +401,6 @@ private:
 	static volatile bool termFlag;
 	static volatile bool tnUploadConfRefreshed;
 	static volatile bool eventConfRefreshed;
-	static volatile bool DOIEnabled;
-	static volatile int kDOIBitmapWidth;
-	static volatile int kDOIBitmapHeight;
 	static SmartThumbnail* smartThInst;
 
 #ifdef _HAS_XSTREAM_
@@ -429,7 +426,11 @@ private:
 
 	bool logMotionEvent;
 	bool logROIMotionEvent;
+        bool logDOIMotionEvent;
+        bool logOutsideDOIMotionEvent;
 	char motionLog[CONFIG_STRING_MAX];
+	char doiMotionLog[CONFIG_STRING_MAX];
+	cv::Mat doi_binary;
 
 	bool uploadReady;
 	bool isPayloadAvailable;
@@ -513,9 +514,9 @@ private:
 	BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
 	time_t stnUploadTime;
 	time_t eventquietTimeStart;
+	time_t eventDOIquietTimeStart;
 	bool debugBlob;
 	bool debugBlobOnFullFrame;
-	cv::Mat DOIBitmap;
         uint8_t doi_enable;
         uint8_t doi_threshold;
 };

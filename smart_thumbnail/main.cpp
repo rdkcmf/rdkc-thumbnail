@@ -53,7 +53,8 @@ int main(int argc, char** argv)
 					  DEFAULT_FRAME_COUNT_TO_PROCESS,
 					  DEFAULT_ROI_FILTER_ENABLE,
 					  DEFAULT_MOTION_CUE_FILTER_ENABLE,
-					  DEFAULT_SIZE_FILTER_THRESHOLD};
+					  DEFAULT_SIZE_FILTER_THRESHOLD,
+					  DEFAULT_DOI_FILTER_ENABLE};
 #endif
 
 	struct timespec currTime;

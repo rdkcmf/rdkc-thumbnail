@@ -81,6 +81,11 @@ extern "C" {
 #define YUV_HRES_BUFFER_ID		0
 #define YUV_HRES_FRAME_WIDTH		1280
 #define YUV_HRES_FRAME_HEIGHT		720
+#ifdef XHB1
+#define YUV_MRES_FRAME_WIDTH            640
+#define YUV_MRES_FRAME_HEIGHT           480
+#endif
+
 
 #ifdef XCAM2
 #define STN_HRES_BUFFER_ID              2
@@ -151,6 +156,7 @@ extern "C" {
 #define DETECTION_CONFIG_FILE "/opt/usr_config/detection_attr.conf"
 #define DEFAULT_FRAME_COUNT_TO_PROCESS "5"
 #define DEFAULT_ROI_FILTER_ENABLE "1"
+#define DEFAULT_DOI_FILTER_ENABLE "1"
 #define DEFAULT_MOTION_FILTER_ENABLE "0"
 #define DEFAULT_MOTION_CUE_FILTER_ENABLE "0"
 #define DEFAULT_SIZE_FILTER_THRESHOLD "50"
@@ -215,9 +221,6 @@ class SmartThumbnail
         bool getUploadStatus();
         //set upload status
         STH_STATUS setUploadStatus(bool status);
-        //Check if STN falls on DOI
-        STH_STATUS applyDOIonSTN(const objFrameData& ofData, const cv::Mat &DOIBitmap);
-        STH_STATUS applyDOIonSTN();
 	//Pushes the data to the upload queue at the end of interval.
 	STH_STATUS createPayload();
         //Routine to upload STN Payload
@@ -244,7 +247,7 @@ class SmartThumbnail
         STH_STATUS setClipEnd(bool status);
 	void onCompletedDeliveryDetection(const DetectionResult &result);
         std::vector<cv::Point> getPolygonInCroppedRegion(std::vector<cv::Point> polygon, std::vector<cv::Point> croppedRegion);
-	friend cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionBlobs);
+	friend cv::Mat mpipe_port_getNextFrame(std::vector<cv::Point>& roiCoords, std::vector<std::vector<cv::Point>>& motionBlobs, cv::Mat& doi_bitmap);
 #endif
         static int stnUploadInterval;
         int stnUploadMaxTimeOut;
@@ -273,15 +276,13 @@ class SmartThumbnail
 	static void onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 #ifdef _OBJ_DETECTION_
         static void onMsgROIChanged(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
+        static void onMsgDOIChanged(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 	void printPolygonCoords(const char * str, std::vector<cv::Point>& polygon);
         void printROI();
 #endif
 #ifdef ENABLE_TEST_HARNESS
         static void onClipStatus(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
 #endif
-        //Process DOI config update
-        static void onMsgDOIConfRefresh(rtMessageHeader const* hdr, uint8_t const* buff, uint32_t n, void* closure);
-
 	//Updates object frame
 	static void  updateObjFrameData(int32_t boundingBoxXOrd,int32_t boundingBoxYOrd,int32_t boundingBoxWidth,int32_t boundingBoxHeight,uint64_t currTime);
         //Updates object Boxes
@@ -316,7 +317,6 @@ class SmartThumbnail
 	cv::Size getCropSize(cv::Rect boundRect,double w,double h, double *rescaleSize);
 	cv::Rect getRelativeBoundingBox(cv::Rect boundRect, cv::Size cropSize, cv::Point2f allignedCenter);
 
-        static volatile bool DOIEnabled;
 	static SmartThumbnail* smartThInst;
 	int g_hres_buf_id;
    	bool hres_yuvDataMemoryAllocationDone;
@@ -374,7 +374,11 @@ class SmartThumbnail
 #endif
         bool logMotionEvent;
         bool logROIMotionEvent;
+	bool logDOIMotionEvent;
+        bool logOutsideDOIMotionEvent;
         char motionLog[CONFIG_STRING_MAX];
+	char doiMotionLog[CONFIG_STRING_MAX];
+	cv::Mat doi_binary;
 
 	std::thread rtMessageReceive;
 	std::thread uploadThread;
@@ -419,7 +423,7 @@ class SmartThumbnail
 	cv::Rect smartThumbCoord;
         BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
         time_t eventquietTimeStart;
-        cv::Mat DOIBitmap;
+	time_t eventDOIquietTimeStart;
 };
 
 struct SmarttnMetadata_thumb
