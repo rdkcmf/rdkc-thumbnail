@@ -2966,7 +2966,7 @@ void SmartThumbnail::generateCVREvents()
 		struct tm *tv = gmtime(&startTime.tv_sec);
 		snprintf(clipName, sizeof(clipName), "%04d%02d%02d%02d%02d%02d", (tv->tm_year+1900), tv->tm_mon+1, tv->tm_mday, tv->tm_hour, tv->tm_min, tv->tm_sec);
 
-		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Simulate : CLIP_GEN_START.\n", __FILE__, __LINE__);
+		RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Simulate : CLIP_GEN_START.\n", __FILE__, __LINE__);
 		smartThInst -> OnClipGenStart(clipName);
 
 		//clock current time
@@ -2975,14 +2975,14 @@ void SmartThumbnail::generateCVREvents()
 		remainingTime =  smartThInst -> stnUploadInterval - (currTime.tv_sec - startTime.tv_sec);
 		sleep(remainingTime);
 
-		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Simulate : CLIP_GEN_END.\n", __FILE__, __LINE__);
+		RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Simulate : CLIP_GEN_END.\n", __FILE__, __LINE__);
 		smartThInst -> OnClipGenEnd(clipName);
 
 		memset(smartThInst->uploadFname, 0, sizeof(smartThInst->uploadFname));
 		strcpy(smartThInst->uploadFname, clipName);
 		strcat(smartThInst->uploadFname, ".jpg");
 
-		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Simulate : CLIP_UPLOAD_OK.\n", __FILE__, __LINE__);
+		RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Simulate : CLIP_UPLOAD_OK.\n", __FILE__, __LINE__);
 		smartThInst -> OnClipUploadSuccess(clipName);
 	}
 }
