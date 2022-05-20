@@ -266,12 +266,11 @@ SmartThumbnail::SmartThumbnail():
 				sTnHeight(STN_DEFAULT_HEIGHT),
 				sTnWidth(STN_DEFAULT_WIDTH),
 				stnUploadTime(0),
-
-#ifndef _OBJ_DETECTION_
 				eventquietTimeStart(0),
-#else
+				eventDOIquietTimeStart(0),
+				stnUploadMaxTimeOut(STN_MAX_UPLOAD_TIME_OUT_20),
+#ifdef _OBJ_DETECTION_
 				clipEnd(false),
-				eventquietTimeStart(0),
 				detectionCompleted(false),
 				mpipe_hres_yuvData(NULL),
 				detectionInProgress(false),
@@ -411,6 +410,12 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,i
 	}
 #endif
 
+	if(isCvrEnabled) {
+		stnUploadMaxTimeOut = STN_MAX_UPLOAD_TIME_OUT_30;
+	} else {
+		stnUploadMaxTimeOut = STN_MAX_UPLOAD_TIME_OUT_20;
+	}
+
 	// update mac/model/camera image
 	setMacAddress(macAddress);
 	setModelName(modelName);
@@ -518,6 +523,7 @@ STH_STATUS SmartThumbnail::init(char* mac,bool isCvrEnabled,int stnondelayType,i
 	if(detectionEnabled) {
 
 		stnUploadInterval = DELIVERY_STN_UPLOAD_INTERVAL;
+		stnUploadMaxTimeOut = STN_MAX_UPLOAD_TIME_OUT_30;
 		//Initialize delivery detection thread
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Creating delivery detection thread.\n", __FUNCTION__, __LINE__);
 		std::thread deliveryDetectionThread(__mpipe_thread_main__, detectionConfig);
@@ -1177,6 +1183,35 @@ STH_STATUS SmartThumbnail::delSTN(char* uploadFname)
 	return STH_SUCCESS;
 }
 
+/** @description: deletes all the cached smart thumbnail from list.
+ *  @return: STH_SUCCESS on success, STH_ERROR otherwise
+ */
+STH_STATUS SmartThumbnail::delAllSTN()
+{
+	struct stat statbuf;
+
+	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Deleting all the SMT files from cache of size %d\n", __FILE__, __LINE__, STNList.size());
+	std::unique_lock<std::mutex> lock(stnMutex);
+
+	for (int cnt = 0; cnt < STNList.size(); ++cnt) {
+		if(stat(CACHE_SMARTTHUMBNAIL, &statbuf) < 0) {
+			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Deleting %s file, and erasing from list\n", __FUNCTION__ , __LINE__, STNList[cnt].fname);
+			unlink(STNList[cnt].fname);
+		} else {
+			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Caching %s file for reference\n", __FUNCTION__ , __LINE__, STNList[cnt].fname);
+		}
+#ifdef _OBJ_DETECTION_
+		json_decref(STNList[cnt].detectionResult);
+#endif
+	}
+
+	STNList.clear();
+	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Deleted all the SMT files and cache size is %d\n", __FILE__, __LINE__, STNList.size());
+
+	lock.unlock();
+	return STH_SUCCESS;
+}
+
 /** @description: creates the payload STN list for uploading.
  *  @param[in] : void
  *  @return: STH_SUCCESS on success, STH_ERROR otherwise
@@ -1760,11 +1795,9 @@ void SmartThumbnail::OnClipGenEnd(const char * cvrClipFname)
 		memset (&currTime, 0, sizeof(struct timespec));
 		clock_gettime(CLOCK_REALTIME, &currTime);
 		bool ignoreMotion = false;
+		smartThInst->currSTN.motionTime = currTime.tv_sec;
 #ifdef _OBJ_DETECTION_
-		if(smartThInst -> detectionEnabled) {
-			smartThInst->currSTN.motionTime = currTime.tv_sec;
-		}
-		else {
+		if(!smartThInst -> detectionEnabled) {
 #endif
 			if((currTime.tv_sec - smartThInst->stnUploadTime) < smartThInst->event_quiet_time) {
 				ignoreMotion = true;
@@ -2574,7 +2607,7 @@ int SmartThumbnail::retryAtExpRate()
 	int ret = RDKC_FAILURE;
 	int retryFactor = 2;
 
-	if(waitingInterval <= STN_UPLOAD_TIME_INTERVAL) {
+	if(waitingInterval <= stnUploadMaxTimeOut) {
 		RDK_LOG( RDK_LOG_TRACE1,"LOG.RDK.CVRPOLL","%s: %d: Waiting for %d seconds!\n", __FILE__, __LINE__, (int)waitingInterval);
 		sleep(waitingInterval);
 		waitingInterval *= retryFactor;
@@ -2588,7 +2621,7 @@ int SmartThumbnail::retryAtExpRate()
  *  @param[in] : time left
  *  @return: void
  */
-void SmartThumbnail::uploadPayload()
+STH_STATUS SmartThumbnail::uploadPayload()
 {
 	int curlCode = 0;
 	long response_code = 0;
@@ -2618,6 +2651,7 @@ void SmartThumbnail::uploadPayload()
 	int retry = 0;
 	int remainingTime = 0;
 	time_t stnTS = (time_t)(smartThInst->payload.tstamp);
+	STH_STATUS ret = STH_ERROR;
 
 #ifdef _OBJ_DETECTION_
 	char encodedBuff[512];
@@ -2639,7 +2673,7 @@ void SmartThumbnail::uploadPayload()
 		//clock the current time
 		memset(&currTime, 0, sizeof(currTime));
 		clock_gettime(CLOCK_REALTIME, &currTime);
-		remainingTime = STN_UPLOAD_TIME_INTERVAL - (currTime.tv_sec - startTime.tv_sec);
+		remainingTime = stnUploadMaxTimeOut - (currTime.tv_sec - startTime.tv_sec);
 
 		if ( remainingTime <= 0 ) {
 			RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL", "%s(%d): Max time exceeded for stn upload after retry count %d !!!\n", __FILE__,__LINE__, retry);
@@ -2682,38 +2716,6 @@ void SmartThumbnail::uploadPayload()
 				continue;
 				*/
 			}
-
-#ifdef _OBJ_DETECTION_
-			if(smartThInst -> detectionEnabled) {
-				RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Waiting for detection to finish\n", __FUNCTION__, __LINE__);
-				struct timeval start, end;
-				gettimeofday(&start, NULL);
-				bool detectionStatus = true;
-				if((!strcmp(currDetectionSTNFname, payload.fname)) && (detectionStatus = smartThInst->getDetectionStatus())) {
-					RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection completed\n", __FUNCTION__, __LINE__);
-				}
-				else if(detectionStatus == false) {
-					RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection not completed!... Adding empty detection result to payload\n", __FUNCTION__, __LINE__);
-					payload.detectionResult = json_object();
-					json_object_set_new(payload.detectionResult, "tags", json_array());
-				}
-
-				if((!payload.deliveryDetected) && ((payload.motionTime - smartThInst->stnUploadTime) < smartThInst->event_quiet_time)) {
-					lock.unlock();
-					delSTN(sTnUploadFpath);
-					RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr motion time %ld prev motion upload time %ld\n", __FILE__, __LINE__, payload.motionTime, smartThInst->stnUploadTime);
-					return;
-				}
-
-				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->motionLog);
-
-				gettimeofday(&end, NULL);
-				double time_taken;
-				time_taken = (end.tv_sec - start.tv_sec) * 1e6;
-				time_taken = (time_taken + (end.tv_usec - start.tv_usec)) * 1e-6;
-				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Upload waited %lf seconds for delivery detection!!!\n",__FUNCTION__,__LINE__, time_taken);
-			}
-#endif
 
 			fileLen = fileStat.st_size;
 			RDK_LOG(RDK_LOG_INFO, "LOG.RDK.SMARTTHUMBNAIL", "%s(%d):Length of the smart thumbnail file to be uploaded:%d\n", __FILE__, __LINE__,fileLen);
@@ -2892,6 +2894,7 @@ void SmartThumbnail::uploadPayload()
 		else {
 			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-TimeStamp-Delta: %s X-EVENT-TIME: %s X-BoundingBox: %d %d %d %d X-VIDEO-RECORDING:OFF X-BoundingBoxes: %s\n", __FUNCTION__, __LINE__, deltaTS, sTnTStamp, payload.unionBox.boundingBoxXOrd, payload.unionBox.boundingBoxYOrd, payload.unionBox.boundingBoxWidth, payload.unionBox.boundingBoxHeight, objectBoxsBuf);
 		}
+		ret = STH_SUCCESS;
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): StnTimestamp,CurrentTimestamp,Latency:%ld,%ld,%ld\n",__FUNCTION__,__LINE__, stnTS, currTime.tv_sec, (currTime.tv_sec-stnTS));
 	}
 	else {
@@ -2920,6 +2923,7 @@ void SmartThumbnail::uploadPayload()
 		std::ofstream output(REQUEST_RECOVERY_FILE);
 	}
 #endif
+	return ret;
 
 }
 
@@ -2987,6 +2991,160 @@ void SmartThumbnail::generateCVREvents()
 	}
 }
 
+#ifdef _OBJ_DETECTION_
+bool SmartThumbnail::checkForDeliveryInCache()
+{
+	for(auto it = STNList.begin(); it != STNList.end(); it++) {
+		if ((*it).deliveryDetected) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool SmartThumbnail::updateCacheWithLatestDelivery()
+{
+	auto it = STNList.rbegin();
+	auto listEnd = STNList.rbegin();
+
+	// Swap the last delivery thumbnail with list end.
+	for(it++; !(*listEnd).deliveryDetected && it != STNList.rend(); it++) {
+		if ((*it).deliveryDetected) {
+			std::swap((*it), (*listEnd));
+		}
+	}
+
+	//Copy the thumbnail to upload to payload
+	int createPayloadStatus =  smartThInst->createPayload((*listEnd).fname);
+	if(STH_SUCCESS == createPayloadStatus) {
+
+		RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d  payload created for CVR clip :%s.\n", __FUNCTION__, __LINE__, (*listEnd).fname);
+#ifdef _OBJ_DETECTION_
+                if(strcmp(smartThInst->currDetectionSTNFname, (*listEnd).fname) == 0) {
+                        gettimeofday(&(smartThInst -> uploadTriggeredTime), NULL);
+                }
+#endif
+	} else {
+		RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d  payload creation failed for CVR clip :%s.\n", __FUNCTION__, __LINE__, (*listEnd).fname);
+	}
+}
+
+void SmartThumbnail::waitForDeliveryResult()
+{
+	struct timeval start, end;
+	gettimeofday(&start, NULL);
+
+	bool detectionStatus = true;
+
+	//Wait for the delivery detection process for the current thumbnail to finish
+	if((!strcmp(currDetectionSTNFname, payload.fname)) && (detectionStatus = smartThInst->getDetectionStatus())) {
+		RDK_LOG( RDK_LOG_DEBUG,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection completed for thumbnail %s\n", __FUNCTION__, __LINE__, payload.fname);
+	} else if(detectionStatus == false) {
+		RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection not completed!... Adding empty detection result to payload for thumbnail %s\n", __FUNCTION__, __LINE__, payload.fname);
+		payload.detectionResult = json_object();
+		json_object_set_new(payload.detectionResult, "tags", json_array());
+	}
+
+	gettimeofday(&end, NULL);
+	double time_taken;
+	time_taken = (end.tv_sec - start.tv_sec) * 1e6;
+	time_taken = (time_taken + (end.tv_usec - start.tv_usec)) * 1e-6;
+	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Upload waited %lf seconds for delivery detection!!!\n",__FUNCTION__,__LINE__, time_taken);
+}
+#endif
+
+bool SmartThumbnail::checkForQuietTime()
+{
+	//Check for event quiet time if this thumbnail is not a delivery
+#ifdef _OBJ_DETECTION_
+	if((!payload.deliveryDetected) && ((payload.motionTime - smartThInst->stnUploadTime) < smartThInst->event_quiet_time))
+#else
+	if((payload.motionTime - smartThInst->stnUploadTime) < smartThInst->event_quiet_time)
+#endif
+	{
+		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr motion time %ld prev motion upload time %ld\n", __FILE__, __LINE__, payload.motionTime, smartThInst->stnUploadTime);
+		return true;
+	} else {
+		if(strlen(smartThInst->motionLog)) {
+			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->motionLog);
+		}
+		if(strlen(smartThInst->doiMotionLog)) {
+			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->doiMotionLog);
+		}
+		return false;
+	}
+}
+
+void SmartThumbnail::triggerUpload()
+{
+	int size = 0;
+	bool isUploadingDelivery = false;
+
+	do {
+
+#ifdef _OBJ_DETECTION_
+		if(smartThInst -> detectionEnabled) {
+			waitForDeliveryResult();
+		}
+#endif
+		if(checkForQuietTime()) {
+			delAllSTN();
+			return;
+		}
+
+#ifdef _OBJ_DETECTION_
+		//Check if the current entry for upload is a delivery
+		if(payload.deliveryDetected) {
+			isUploadingDelivery = true;
+		}
+#endif
+
+		if (STNList.size() == 0) {
+			RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Empty Smartthumbnail cache hence skipping upload\n", __FILE__, __LINE__);
+			return;
+		}
+
+		STH_STATUS ret = smartThInst->uploadPayload();
+		if (ret == STH_SUCCESS) {
+			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Removing smart thumbnail upload file: %s\n",__FILE__, __LINE__, uploadFname);
+#ifdef _OBJ_DETECTION_
+			//Check if there is a delivery in the list to upload, if the preveously uploaded is not a delivery
+			if(detectionEnabled && !isUploadingDelivery && checkForDeliveryInCache()) {
+				updateCacheWithLatestDelivery();
+				continue;
+			}
+#endif
+			delAllSTN();
+			break;
+		}
+		else {
+			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Removing smart thumbnail upload file: %s\n",__FILE__, __LINE__, uploadFname);
+			delSTN(uploadFname);
+#ifdef _OBJ_DETECTION_
+			if(detectionEnabled && checkForDeliveryInCache()) {
+				updateCacheWithLatestDelivery();
+				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Pick %s for upload since it has delivery\n",__FILE__, __LINE__, payload.fname);
+			} 
+			if(!detectionEnabled) {
+#endif
+				auto listEnd = STNList.rbegin();
+			        //Copy the thumbnail to upload to payload
+			        int createPayloadStatus =  smartThInst->createPayload((*listEnd).fname);
+			        if(STH_SUCCESS == createPayloadStatus) {
+                			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d  payload created for CVR clip :%s.\n", __FUNCTION__, __LINE__, (*listEnd).fname);
+			        } else {
+                		RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d  payload creation failed for CVR clip :%s.\n", __FUNCTION__, __LINE__, (*listEnd).fname);
+        			}
+#ifdef _OBJ_DETECTION_
+			}
+#endif
+		}
+		std::unique_lock<std::mutex> lock(stnMutex);
+		size = STNList.size();
+		lock.unlock();
+	} while(size);
+}
+
 void SmartThumbnail::uploadSTN()
 {
 	while (!termFlag) {
@@ -3023,7 +3181,7 @@ void SmartThumbnail::uploadSTN()
 		}
 
 		if(smartThInst -> getUploadStatus()) {
-			smartThInst->uploadPayload();
+			smartThInst->triggerUpload();
 		}
 	}
 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Exiting smart thumbnail upload thread.\n",__FUNCTION__,__LINE__);

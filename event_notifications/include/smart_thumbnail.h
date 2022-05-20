@@ -119,6 +119,8 @@ extern "C" {
 #endif
 
 #define STN_TIMESTAMP_TAG		"timestamp"
+#define STN_MAX_UPLOAD_TIME_OUT_20	20
+#define STN_MAX_UPLOAD_TIME_OUT_30	30
 #define STN_UPLOAD_TIME_INTERVAL	30
 #define STN_UPLOAD_THRESHOLD_INTERVAL   60
 
@@ -209,9 +211,9 @@ typedef struct {
 
 #ifdef _OBJ_DETECTION_
 	json_t *detectionResult;
-	uint64_t motionTime;
 	bool deliveryDetected;
 #endif
+	uint64_t motionTime;
 
 	BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
 	BoundingBox unionBox;
@@ -269,7 +271,9 @@ public:
 	STH_STATUS setUploadStatus(bool status);
 
 	//Upload smart thumbnail data
-	void uploadPayload();
+	STH_STATUS uploadPayload();
+
+	void triggerUpload();
 
 	static void generateCVREvents();
 
@@ -310,12 +314,17 @@ private:
 	STH_STATUS addSTN();
 	STH_STATUS checkSTN();
 	STH_STATUS delSTN(char* uploadFname);
+	STH_STATUS delAllSTN();
 	void printSTNList();
 	STH_STATUS createPayload(char* uploadFname);
-
+	bool checkForQuietTime();
+        
 #ifdef _OBJ_DETECTION_
 	STH_STATUS updateUploadPayload(char * fname, DetectionResult result);
 	void createJSONFromDetectionResult(DetectionResult result, json_t* &resultJson);
+	bool checkForDeliveryInCache();
+	void waitForDeliveryResult();
+	bool updateCacheWithLatestDelivery();
 #endif
 
 	STH_STATUS getTnUploadConf();
@@ -485,6 +494,7 @@ private:
 	int32_t event_quiet_time;
 	uint64_t tsDelta;
 	int stnUploadInterval;
+	int stnUploadMaxTimeOut;
 
 	char smtTnUploadURL[CONFIG_STRING_MAX];
 	char smtTnAuthCode[AUTH_TOKEN_MAX];
