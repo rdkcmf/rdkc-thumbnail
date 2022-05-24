@@ -267,7 +267,6 @@ SmartThumbnail::SmartThumbnail():
 				sTnWidth(STN_DEFAULT_WIDTH),
 				stnUploadTime(0),
 				eventquietTimeStart(0),
-				eventDOIquietTimeStart(0),
 				stnUploadMaxTimeOut(STN_MAX_UPLOAD_TIME_OUT_20),
 #ifdef _OBJ_DETECTION_
 				clipEnd(false),
@@ -3065,12 +3064,7 @@ bool SmartThumbnail::checkForQuietTime()
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr motion time %ld prev motion upload time %ld\n", __FILE__, __LINE__, payload.motionTime, smartThInst->stnUploadTime);
 		return true;
 	} else {
-		if(strlen(smartThInst->motionLog)) {
-			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->motionLog);
-		}
-		if(strlen(smartThInst->doiMotionLog)) {
-			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->doiMotionLog);
-		}
+	        RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->motionLog);
 		return false;
 	}
 }
