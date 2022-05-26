@@ -1890,6 +1890,7 @@ void SmartThumbnail::onMsgProcessFrame(rtMessageHeader const* hdr, uint8_t const
 
 		    smTnInstance -> printROI();
 
+		    smartThInst -> setDeliveryDetectionCompleted(false);
 	            smartThInst -> isPayloadAvailable = true;
                     smartThInst->mpipeProcessedframes = 0;
 		    gettimeofday(&(smartThInst -> detectionStartTime), NULL);
