@@ -894,8 +894,10 @@ int ThumbnailUpload::postFileToTNUploadServer(char *file_path, int file_len, cha
 		{
 			if (0 == uploadRetryCount ) {
 				RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Data post Successfully, Response Code : %ld, Upload Duration(in ms) : %ld\n", __FILE__, __LINE__,*response_code, uploadDuration);
+				t2_event_s("LC_INFO_TnailUploaded_split", "Data post Successfully, Response Code");
 			} else {
 				RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Data post Successfully after retry, Response Code : %ld, Upload Duration(in ms) : %ld Retry Count: %d\n", __FILE__, __LINE__,*response_code, uploadDuration, uploadRetryCount);
+				t2_event_s("LC_INFO_TnailRetryUploaded_split", "Data post Successfully after retry");
 			}
 			curl_off_t uploadSpeed = http_client->getUploadSpeed();
 			curl_off_t u1 = 0;
@@ -942,11 +944,13 @@ int ThumbnailUpload::postFileToTNUploadServer(char *file_path, int file_len, cha
 				m_count++;
 	
 			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","Simple Moving Average Upload speed:%" CURL_FORMAT_CURL_OFF_T "\n", m_avgUploadSpeed);
+			t2_event_s("TnailAvgBW_split", "Average Upload speed:");
 			ret = TN_UPLOAD_OK;
 		}
 		else
 		{
 			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Data post Failed. Response code = %ld : curl code = %d\n", __FILE__, __LINE__, *response_code,curlCode);
+			t2_event_s("LC_INFO_TnailUploadFailed_split", "Data post Failed. Response code");
 			ret = TN_UPLOAD_FAIL;
 		}
 	}
@@ -1047,6 +1051,7 @@ int ThumbnailUpload::uploadThumbnailImage()
                 tnStartTime = currTime;
                 dingtouploadDuration = (currTime.tv_sec - thumbnailUpload ->m_dingTime.tv_sec)*1000 + ( currTime.tv_nsec - thumbnailUpload ->m_dingTime.tv_nsec)/1000000;
                 RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Time from ding to start of thumbnail creation is %ld\n", __FILE__, __LINE__, dingtouploadDuration);
+                t2_event_s("DINGlatency_split", "Time from ding to start of thumbnail creation is");
         }
         if( NULL != m_imageTool) {
              //rdkc_snapshooter %s %d %d %d", SNAPSHOT_FILE, COMPRESSION_SCALE, tn_width, tn_height
@@ -1110,6 +1115,7 @@ int ThumbnailUpload::uploadThumbnailImage()
             clock_gettime(CLOCK_REALTIME, &currTime);
             tncreationDuration = (currTime.tv_sec - tnStartTime.tv_sec)*1000 + ( currTime.tv_nsec - tnStartTime.tv_nsec)/1000000;
             RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Time for thumbnail creation is %ld\n", __FILE__, __LINE__, tncreationDuration);
+            t2_event_s("TNtime_split", "Time for thumbnail creation is");
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Triggering Ding thumbnail upload\n", __FILE__, __LINE__);
             m_ding->uploadDingThumbnail();
         }
@@ -1127,6 +1133,7 @@ int ThumbnailUpload::uploadThumbnailImage()
 	//logging few chars of token being sent for triage
 	if(0 != strlen(tn_upload_auth_token)) {
 		printf("Auth token begins with (%.10s) and ends with (%s)\n", tn_upload_auth_token,tn_upload_auth_token + strlen(tn_upload_auth_token) - 5);
+		t2_event_d("LC_INFO_BearerSAT", 1);
 	}
 
 	/* Adding Header */
@@ -1181,12 +1188,14 @@ int ThumbnailUpload::uploadThumbnailImage()
 	if(TN_UPLOAD_OK == ret) {
 		if(true == isActiveInterval) {
 			activeModeUploadCounter += 1;
-	        	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Active mode, Upload Count %d\n",__FILE__, __LINE__,activeModeUploadCounter);
+			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Active mode, Upload Count %d\n",__FILE__, __LINE__,activeModeUploadCounter);
+			t2_event_d("LC_INFO_TnailActupload", 1);
 		}
 #ifdef _HAS_DING_
 		if(thumbnailUpload ->m_dingNotif)
 		{
                         RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Live thumbnail corresponding to ding is successful with header X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dTnTStampmilliseconds);
+                        t2_event_d("DING_INFO_LiveUpld", 1);
                 }
 #endif
 	}
@@ -1458,10 +1467,12 @@ void *ThumbnailUpload::doTNUpload()
 #endif
 					// Retry should happen for the leftover time
 					if( (time_for_upload < 0) ||  (time_for_upload >= MAX_RETRY_SLEEP) ) {
-						RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Retry Happens after 0 seconds\n",__FILE__, __LINE__);	
+						RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Retry Happens after 0 seconds\n",__FILE__, __LINE__);
+						t2_event_s("LC_INFO_TnailRetry_split", "Retry Happens after");
 					}
 					else if( (time_for_upload < MAX_RETRY_SLEEP) ) {
 						RDK_LOG( RDK_LOG_INFO,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Retry Happens after %d seconds\n",__FILE__, __LINE__, (MAX_RETRY_SLEEP - time_for_upload) );
+						t2_event_s("LC_INFO_TnailRetry_split", "Retry Happens after");
 						sleep( MAX_RETRY_SLEEP - time_for_upload ); // Retry every 10(MAX_RETRY_SLEEP) seconds
 					}
 				} else {

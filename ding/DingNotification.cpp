@@ -363,6 +363,7 @@ void DingNotification::sendDingNotification()
     //log success/failure for telemetry
     if ((response_code >= RDKC_HTTP_RESPONSE_OK) && (response_code < RDKC_HTTP_RESPONSE_REDIRECT_START)) {
             RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d): Posting Ding is successfull with header X-EVENT-DATETIME: %s\n",__FUNCTION__,__LINE__,dingTmilliseconds);
+            t2_event_s("DING_INFO_Success_split", "Posting Ding is successfull with header X-EVENT-DATETIME:");
     }else {
             RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): Posting Ding is failed with response code %lu and curl code %d\n",__FUNCTION__,__LINE__, response_code, curlCode);
     }
@@ -522,6 +523,7 @@ void  DingNotification::uploadSnapShot()
                 else
                 {
                         RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): Data post Failed. Response code = %ld : curl code = %d\n", __FILE__, __LINE__, response_code,curlCode);
+                        t2_event_s("LC_ERR_UpldFail_split", "Data post Failed. Response code =");
 			uploadRetryCount++;
 			
 			if(RDKC_SUCCESS != retryAtExpRate()){
@@ -537,9 +539,13 @@ void  DingNotification::uploadSnapShot()
                 totaldinguploadDuration = (currTime.tv_sec - m_dingTime.tv_sec)*1000 + ( currTime.tv_nsec - m_dingTime.tv_nsec)/1000000;
                 if (0 == uploadRetryCount ) {
 				RDK_LOG( RDK_LOG_INFO,"LOG.RDK.BUTTONMGR","%s(%d):Thumbnail upload corresponding to ding is successful with header X-EVENT-DATETIME: %s uploadDuration=%ld TotaldinguploadDuration=%ld\n",__FUNCTION__,__LINE__,dingTmilliseconds,uploadDuration,totaldinguploadDuration);
+				t2_event_d("DING_INFO_ThumbnailUpld", 1);
+				t2_event_s("DINGUpload_split", "TotaldinguploadDuration=");
                 
                 } else {
                                 RDK_LOG(RDK_LOG_INFO ,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to ding is successful after %d retries  with header X-EVENT-DATETIME: %s uploadDuration=%ld TotaldinguploadDuration=%ld\n", __FILE__, __LINE__,uploadRetryCount,dingTmilliseconds,uploadDuration,totaldinguploadDuration);
+                                t2_event_d("DING_INFO_ThumbnailUpld", 1);
+                                t2_event_s("DINGUpload_split", "TotaldinguploadDuration=");
                }
 	}else {
             RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.BUTTONMGR","%s(%d): Thumbnail upload corresponding to Ding failed with response code %lu and curl code %d\n",__FUNCTION__,__LINE__, response_code, curlCode);

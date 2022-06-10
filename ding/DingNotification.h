@@ -30,6 +30,8 @@
 #include "polling_config.h"
 #include "HttpClient.h"
 #include "rdk_debug.h"
+#include "telemetry_busmessage_sender.h"
+
 #define DEFAULT_DNS_CACHE_TIMEOUT	60
 #define MAX_RETRY_COUNT			3
 #define UPLOAD_TIME_INTERVAL            30

@@ -31,6 +31,7 @@ int main(int argc, char *argv[])
         /* ENABLING RDK LOGGER */
         rdk_logger_init("/etc/debug.ini");
         config_init();
+        t2_init("Thumbnail");
 	ThumbnailUpload *thumbnail_upload = ThumbnailUpload::getTNUploadInstance();
 
         thumbnail_upload->rtConnection_init();

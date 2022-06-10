@@ -146,6 +146,7 @@ void SmartThumbnail::onCompletedDeliveryDetection(const DetectionResult &result)
 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection Stats:%0.2f,%d,%d,%0.2lf,%d,%0.2lf,%0.2lf,%d\n", __FUNCTION__, 
 	         __LINE__, result.deliveryScore, result.maxAugScore, result.personScores.size(), 
 	         motionTriggeredTime, mpipeProcessedframes, time_taken, time_waited, result.motion_frame_count);
+	t2_event_s("Delivery_split", "Detection Stats:");
 #ifdef ENABLE_TEST_HARNESS
 	smartThInst->notifyXvision(result, motionTriggeredTime, mpipeProcessedframes, time_taken, time_waited);
 #endif
@@ -967,6 +968,7 @@ STH_STATUS SmartThumbnail::addSTN()
 			memset(stnFname, 0 , sizeof(stnFname));
 			snprintf(stnFname, sizeof(stnFname), "%s/%s", STN_PATH, (*it).fname);
 			RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","addSTN %s(%d) Deleting %s file, and erasing from list\n", __FUNCTION__ , __LINE__, stnFname);
+			t2_event_d("STN_INFO_JpegEarsed", 1);
 			unlink(stnFname);
 			STNList.erase(it);
 			ctr++;
@@ -1004,6 +1006,7 @@ STH_STATUS SmartThumbnail::delSTN(char* uploadFname)
 			//delete the file first
 			if(stat(CACHE_SMARTTHUMBNAIL, &statbuf) < 0) {
 				RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Deleting %s file, and erasing from list\n", __FUNCTION__ , __LINE__, uploadFname);
+				t2_event_d("STN_INFO_JpegEarsed", 1);
 				unlink(uploadFname);
 			}
 			else {
@@ -1037,6 +1040,7 @@ STH_STATUS SmartThumbnail::delAllSTN()
 		snprintf(stnFname, sizeof(stnFname), "%s/%s", STN_PATH, STNList[cnt].fname);
 		if(stat(CACHE_SMARTTHUMBNAIL, &statbuf) < 0) {
 			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Deleting %s file, and erasing from list\n", __FUNCTION__ , __LINE__, stnFname);
+			t2_event_d("STN_INFO_JpegEarsed", 1);
 			unlink(stnFname);
 		} else {
 			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Caching %s file for reference\n", __FUNCTION__ , __LINE__, stnFname);
@@ -1133,6 +1137,7 @@ void SmartThumbnail::createJSONFromDetectionResult(DetectionResult result, json_
 
 	std::string personStat = statStringStream.str();
 	RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Person Stats:%s\n", __FUNCTION__ , __LINE__, personStat.c_str());
+	t2_event_s("Person_split", "Person Stats:");
 	json_object_set_new(resultJson,"tags", tags_array);
 }
 
@@ -1805,6 +1810,7 @@ void SmartThumbnail::onMsgCvrUpload(rtMessageHeader const* hdr, uint8_t const* b
 	  clipUploadStatus <= CVR_UPLOAD_CURL_ERR) {
 		smartThInst->delSTN(stnFname);
 		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d Discard STN, CVR clip %s falied to upload.\n", __FUNCTION__, __LINE__, cvrClipFname);
+		t2_event_d("STN_ERR_DiscardClip", 1);
 	}
 	else {
 		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d Unknown CVR clip upload status.\n", __FUNCTION__, __LINE__);
@@ -2154,6 +2160,7 @@ void SmartThumbnail::ProcessFrameMetadata(SmarttnMetadata_thumb sm, int motionFl
 
 		smartThInst->logMotionEvent = false;
 		RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Received Motion event OUTSIDE ROI from xvision during the current cvr interval,  time received: %llu\n", __FILE__ , __LINE__, curr_time);
+		t2_event_d("STN_INFO_RIOOutSideXVision", 1);
 		smartThInst->eventquietTimeStart = currTime.tv_sec;
 	}
 
@@ -2619,10 +2626,12 @@ STH_STATUS SmartThumbnail::uploadPayload()
 
 			fileLen = fileStat.st_size;
 			RDK_LOG(RDK_LOG_INFO, "LOG.RDK.SMARTTHUMBNAIL", "%s(%d):Length of the smart thumbnail file to be uploaded:%d\n", __FILE__, __LINE__,fileLen);
+			t2_event_s("STNsize_split", "Length of the smart thumbnail file to be uploaded:");
 
 			fd = open(sTnUploadFpath, O_RDONLY);
 			if (fd <= 0) {
 				RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Failed to Open smart thumbnail upload File :%s : error : [%s]\n", __FILE__, __LINE__, sTnUploadFpath, strerror(errno));
+				t2_event_d("STN_ERR_FailedtoOpenClip", 1);
 				lock.unlock();
 				pid_t pid = 0;
 				pid = getpid();
@@ -2766,6 +2775,7 @@ STH_STATUS SmartThumbnail::uploadPayload()
 			retry++;
 			if(RDKC_SUCCESS != retryAtExpRate()) {
 				RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.CVRUPLOAD","%s(%d): retries done with current exp wait interval %d\n",__FILE__, __LINE__,waitingInterval);
+				t2_event_s("STN_ERR_RetryFail_split", "retries done with current exp wait interval ");
 				break;
 			}
 			RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Retrying again for %d times with %d sec remaining timeout  because last try failed  with response code %lu and curl code %d\n",__FUNCTION__,__LINE__,retry, remainingTime, response_code, curlCode);
@@ -2791,15 +2801,19 @@ STH_STATUS SmartThumbnail::uploadPayload()
 
 		if (cvrEnabled) {
 			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-TimeStamp-Delta: %s X-EVENT-TIME: %s X-BoundingBox: %d %d %d %d X-VIDEO-RECORDING:CVR X-BoundingBoxes: %s\n", __FUNCTION__, __LINE__, deltaTS, sTnTStamp, payload.unionBox.boundingBoxXOrd, payload.unionBox.boundingBoxYOrd, payload.unionBox.boundingBoxWidth, payload.unionBox.boundingBoxHeight, objectBoxsBuf);
+			t2_event_d("STN_INFO_Uploaded", 1);
 		}
 		else {
 			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail uploaded successfully with header X-TimeStamp-Delta: %s X-EVENT-TIME: %s X-BoundingBox: %d %d %d %d X-VIDEO-RECORDING:OFF X-BoundingBoxes: %s\n", __FUNCTION__, __LINE__, deltaTS, sTnTStamp, payload.unionBox.boundingBoxXOrd, payload.unionBox.boundingBoxYOrd, payload.unionBox.boundingBoxWidth, payload.unionBox.boundingBoxHeight, objectBoxsBuf);
+			t2_event_d("STN_INFO_Uploaded", 1);
 		}
 		ret = STH_SUCCESS;
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): StnTimestamp,CurrentTimestamp,Latency:%ld,%ld,%ld\n",__FUNCTION__,__LINE__, stnTS, currTime.tv_sec, (currTime.tv_sec-stnTS));
+		t2_event_s("StnStats_split", "StnTimestamp,CurrentTimestamp,Latency:");
 	}
 	else {
 		RDK_LOG( RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Smart Thumbnail upload failed with response code %lu and curl code %d\n",__FUNCTION__,__LINE__, response_code, curlCode);
+		t2_event_d("STN_ERR_UploadFailed", 1);
 	}
 
 #ifdef USE_FILE_UPLOAD
@@ -2951,6 +2965,7 @@ bool SmartThumbnail::checkForQuietTime()
 #endif
 	{
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr motion time %ld prev motion upload time %ld\n", __FILE__, __LINE__, payload.motionTime, smartThInst->stnUploadTime);
+		t2_event_d("STN_INFO_SkipEvent", 1);
 		memset(smartThInst -> motionLog, 0, sizeof(smartThInst -> motionLog));
 		memset(smartThInst -> doiMotionLog, 0, sizeof(smartThInst -> doiMotionLog));
 		return true;

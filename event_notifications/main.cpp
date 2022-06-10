@@ -72,6 +72,8 @@ int main(int argc, char** argv)
 	eh = newBreakPadWrapExceptionHandler();
 #endif
 
+	t2_init("smartTH");
+
 	int itr =0;
 
 	// Parse command line arguments
@@ -244,6 +246,7 @@ int main(int argc, char** argv)
 	// Destroy smartThumbnail instance
 	if(smTnInstance) {
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Deleting smart thumnail instance!!!\n", __FILE__, __LINE__);
+		t2_event_d("STN_ERR_DiscardClip", 1);
 		smTnInstance->destroy();
 	}
 

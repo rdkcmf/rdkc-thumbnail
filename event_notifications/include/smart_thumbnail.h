@@ -84,6 +84,8 @@ extern "C" {
 #include "base64.h"
 #endif
 
+#include "telemetry_busmessage_sender.h"
+
 #define FILEPATH_LEN                    64
 #define CACHE_SMARTTHUMBNAIL      	"/tmp/cache_smart_thumbnail.txt"
 #define FW_NAME_MAX_LENGTH              512

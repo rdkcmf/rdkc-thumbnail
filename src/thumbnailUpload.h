@@ -72,6 +72,9 @@ extern "C" {
 #include "rtLog.h"
 #include "rtConnection.h"
 #include "rtMessage.h"
+
+#include "telemetry_busmessage_sender.h"
+
 #define WEBPA_ADDRESS "tcp://127.0.0.1:10001"
 #define SMA_FACTOR 10
 
