@@ -134,7 +134,8 @@ ThumbnailUpload::ThumbnailUpload():http_client(NULL)
         std::string aspect_ratio = "16:9";
 #endif
 
-        if(!m_settings.loadFromFile(std::string(ASPECTRATIO_FILE)))
+	struct stat statbuf;
+        if((stat(ASPECTRATIO_FILE, &statbuf) < 0) || (!m_settings.loadFromFile(std::string(ASPECTRATIO_FILE))))
         {
 #ifdef XHB1
                 RDK_LOG(RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Loading aspect ratio file failed, setting aspect ratio to default 4:3\n", __FILE__, __LINE__);

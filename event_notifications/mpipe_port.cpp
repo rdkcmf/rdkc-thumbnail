@@ -161,7 +161,8 @@ void loadDetectionConfig(DetectionConfig *config, char *configFile)
 
 	std::string motionFilterStatus = DEFAULT_MOTION_FILTER_ENABLE;
  
-	if(!m_settings.loadFromFile(std::string(configFile))) {
+	struct stat statbuf;
+	if((stat(configFile, &statbuf) < 0) || (!m_settings.loadFromFile(std::string(configFile)))) {
 		RDK_LOG(RDK_LOG_WARN,"LOG.RDK.THUMBNAILUPLOAD","%s(%d): Loading detection config file failed, loading default settings\n", __FILE__, __LINE__);
 	}
 	else {
