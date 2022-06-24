@@ -1187,17 +1187,20 @@ STH_STATUS SmartThumbnail::delSTN(char* uploadFname)
  */
 STH_STATUS SmartThumbnail::delAllSTN()
 {
+	char stnFname[256] ={0};
 	struct stat statbuf;
 
 	RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Deleting all the SMT files from cache of size %d\n", __FILE__, __LINE__, STNList.size());
 	std::unique_lock<std::mutex> lock(stnMutex);
 
 	for (int cnt = 0; cnt < STNList.size(); ++cnt) {
+		memset(stnFname, 0 , sizeof(stnFname));
+		snprintf(stnFname, sizeof(stnFname), "%s/%s", STN_PATH, STNList[cnt].fname);
 		if(stat(CACHE_SMARTTHUMBNAIL, &statbuf) < 0) {
-			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Deleting %s file, and erasing from list\n", __FUNCTION__ , __LINE__, STNList[cnt].fname);
-			unlink(STNList[cnt].fname);
+			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Deleting %s file, and erasing from list\n", __FUNCTION__ , __LINE__, stnFname);
+			unlink(stnFname);
 		} else {
-			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Caching %s file for reference\n", __FUNCTION__ , __LINE__, STNList[cnt].fname);
+			RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d) Caching %s file for reference\n", __FUNCTION__ , __LINE__, stnFname);
 		}
 #ifdef _OBJ_DETECTION_
 		json_decref(STNList[cnt].detectionResult);
