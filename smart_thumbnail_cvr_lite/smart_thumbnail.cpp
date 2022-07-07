@@ -862,145 +862,140 @@ STH_STATUS SmartThumbnail::createPayload()
 	    cv::cvtColor(smartThInst -> ofData.maxBboxObjYUVFrame,lHresRGBMat, cv::COLOR_YUV2BGR_NV12);
 #endif
 
-	    unionBox.x = smartThInst -> ofData.boundingBoxXOrd;
-	    unionBox.y = smartThInst -> ofData.boundingBoxYOrd;
-	    unionBox.width = smartThInst -> ofData.boundingBoxWidth;
-	    unionBox.height = smartThInst -> ofData.boundingBoxHeight;
+	    if(lHresRGBMat.empty()) {
+		RDK_LOG(RDK_LOG_WARN, "LOG.RDK.SMARTTHUMBNAIL", "%s(%d):Empty frame for thumbnail creation, discarding this motion\n", __FILE__, __LINE__);
+		lock.unlock();
+	    } else {
 
-	    // update motion blob coordinates
-	    for(int32_t i=0; i<UPPER_LIMIT_BLOB_BB; i++) {
+	        unionBox.x = smartThInst -> ofData.boundingBoxXOrd;
+	        unionBox.y = smartThInst -> ofData.boundingBoxYOrd;
+	        unionBox.width = smartThInst -> ofData.boundingBoxWidth;
+	        unionBox.height = smartThInst -> ofData.boundingBoxHeight;
 
-	        /*if(smartThInst -> objectBoxs[i].boundingBoxXOrd == INVALID_BBOX_ORD) {
-	            break;
-	        }*/
-	        payload.objectBoxs[i].boundingBoxXOrd = smartThInst->objectBoxs[i].boundingBoxXOrd;
-	        payload.objectBoxs[i].boundingBoxYOrd = smartThInst->objectBoxs[i].boundingBoxYOrd;
-	        payload.objectBoxs[i].boundingBoxWidth = smartThInst->objectBoxs[i].boundingBoxWidth;
-	        payload.objectBoxs[i].boundingBoxHeight = smartThInst->objectBoxs[i].boundingBoxHeight;
-	    }
+	        // update motion blob coordinates
+	        for(int32_t i=0; i<UPPER_LIMIT_BLOB_BB; i++) {
 
-	    payload.tsDelta = ofData.tsDelta;
+	            /*if(smartThInst -> objectBoxs[i].boundingBoxXOrd == INVALID_BBOX_ORD) {
+	                break;
+	            }*/
+	            payload.objectBoxs[i].boundingBoxXOrd = smartThInst->objectBoxs[i].boundingBoxXOrd;
+	            payload.objectBoxs[i].boundingBoxYOrd = smartThInst->objectBoxs[i].boundingBoxYOrd;
+	            payload.objectBoxs[i].boundingBoxWidth = smartThInst->objectBoxs[i].boundingBoxWidth;
+	            payload.objectBoxs[i].boundingBoxHeight = smartThInst->objectBoxs[i].boundingBoxHeight;
+	        }
 
-	    // extracted the below logic from server scala code
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):unionBox.x %d unionBox.y %d unionBox.height %d unionBox.width %d\n", __FILE__, __LINE__, unionBox.x, unionBox.y, unionBox.height, unionBox.width);
-            /* ScaleFactor for downsizing the frame before cropping the thumbnail. If the
-             * union blob is bigger than the thumbnail size, downsize the frame to fit the
-             * union blob in thumbnail */
+	        payload.tsDelta = ofData.tsDelta;
 
-            double scaleFactor = 1;
-	    cv::Size cropSize = getCropSize(unionBox, sTnWidth, sTnHeight, &scaleFactor);
-            if(scaleFactor != 1) {
-                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Resizing scale for the thumbnail is %lf\n", __FILE__, __LINE__, scaleFactor);
-                cv::Size rescaleSize = cv::Size(lHresRGBMat.cols/scaleFactor, lHresRGBMat.rows/scaleFactor);
-                //resize the frame to fit the union blob in the thumbnail
-                cv::resize(lHresRGBMat, lHresRGBMat, rescaleSize);
-                //Resize the union blob also accordingly
-                unionBox.width = unionBox.width/scaleFactor;
-                unionBox.height = unionBox.height/scaleFactor;
-                unionBox.x = unionBox.x/scaleFactor;
-                unionBox.y = unionBox.y/scaleFactor;
-            } else {
-                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Not resizing the thumbnail\n", __FILE__, __LINE__);
-            }
-	    cv::Point2f orgCenter = getActualCentroid(unionBox);
-	    cv::Point2f allignedCenter =  alignCentroid(orgCenter, lHresRGBMat, cropSize);
-	    getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
-	    relativeBBox = getRelativeBoundingBox(unionBox, cropSize, allignedCenter);
+                // extracted the below logic from server scala code
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):unionBox.x %d unionBox.y %d unionBox.height %d unionBox.width %d\n", __FILE__, __LINE__, unionBox.x, unionBox.y, unionBox.height, unionBox.width);
+                /* ScaleFactor for downsizing the frame before cropping the thumbnail. If the
+                 * union blob is bigger than the thumbnail size, downsize the frame to fit the
+                 * union blob in thumbnail */
 
-	    // update union box co-ordinate
-	    payload.unionBox.boundingBoxXOrd = relativeBBox.x;
-	    payload.unionBox.boundingBoxYOrd = relativeBBox.y;
-	    payload.unionBox.boundingBoxWidth = relativeBBox.width;
-	    payload.unionBox.boundingBoxHeight = relativeBBox.height;
-
-            for(int32_t i=0; i< UPPER_LIMIT_BLOB_BB; i++) {
-                if(payload.objectBoxs[i].boundingBoxXOrd != -1) {
-                    cv::Rect motionBlob, rescaledBlob;
-
-                    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Before rescaling : Motion Blob[%d] : %d, %d, %d, %d\n", __FILE__, __LINE__,i, payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd, payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight);
-
-                    //Resize motion blob according to the scaleFactor
-                    payload.objectBoxs[i].boundingBoxXOrd /= scaleFactor;
-                    payload.objectBoxs[i].boundingBoxYOrd /= scaleFactor;
-                    payload.objectBoxs[i].boundingBoxWidth /= scaleFactor;
-                    payload.objectBoxs[i].boundingBoxHeight /= scaleFactor;
-
-                    motionBlob = cv::Rect(payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd, payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight);
-
-                    //Align the motion blob coordinates to the cropped image size
-                    rescaledBlob = getRelativeBoundingBox(motionBlob, cropSize, allignedCenter);
-
-                    payload.objectBoxs[i].boundingBoxXOrd = rescaledBlob.x;
-                    payload.objectBoxs[i].boundingBoxYOrd = rescaledBlob.y;
-                    payload.objectBoxs[i].boundingBoxWidth = rescaledBlob.width;
-                    payload.objectBoxs[i].boundingBoxHeight = rescaledBlob.height;
-
-                    RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):After rescaling : Motion Blob[%d] : %d, %d, %d, %d\n", __FILE__, __LINE__,i, payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd, payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight);
+                double scaleFactor = 1;
+	        cv::Size cropSize = getCropSize(unionBox, sTnWidth, sTnHeight, &scaleFactor);
+                if(scaleFactor != 1) {
+                    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Resizing scale for the thumbnail is %lf\n", __FILE__, __LINE__, scaleFactor);
+                    cv::Size rescaleSize = cv::Size(lHresRGBMat.cols/scaleFactor, lHresRGBMat.rows/scaleFactor);
+                    //resize the frame to fit the union blob in the thumbnail
+                    cv::resize(lHresRGBMat, lHresRGBMat, rescaleSize);
+                    //Resize the union blob also accordingly
+                    unionBox.width = unionBox.width/scaleFactor;
+                    unionBox.height = unionBox.height/scaleFactor;
+                    unionBox.x = unionBox.x/scaleFactor;
+                    unionBox.y = unionBox.y/scaleFactor;
+                } else {
+                    RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Not resizing the thumbnail\n", __FILE__, __LINE__);
                 }
-            }
+	        cv::Point2f orgCenter = getActualCentroid(unionBox);
+	        cv::Point2f allignedCenter =  alignCentroid(orgCenter, lHresRGBMat, cropSize);
+	        getRectSubPix(lHresRGBMat, cropSize, allignedCenter, croppedObj);
+	        relativeBBox = getRelativeBoundingBox(unionBox, cropSize, allignedCenter);
 
-           //Update cropped SmartThumbnail Coordinates
-           smartThumbCoord.x = (allignedCenter.x - (cropSize.width / 2));
-           smartThumbCoord.y = (allignedCenter.y - (cropSize.height / 2));
-           smartThumbCoord.width = cropSize.width;
-           smartThumbCoord.height = cropSize.height;
+	        // update union box co-ordinate
+	        payload.unionBox.boundingBoxXOrd = relativeBBox.x;
+	        payload.unionBox.boundingBoxYOrd = relativeBBox.y;
+	        payload.unionBox.boundingBoxWidth = relativeBBox.width;
+	        payload.unionBox.boundingBoxHeight = relativeBBox.height;
+
+                for(int32_t i=0; i< UPPER_LIMIT_BLOB_BB; i++) {
+                    if(payload.objectBoxs[i].boundingBoxXOrd != -1) {
+                        cv::Rect motionBlob, rescaledBlob;
+
+                        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):Before rescaling : Motion Blob[%d] : %d, %d, %d, %d\n", __FILE__, __LINE__,i, payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd, payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight);
+
+                        //Resize motion blob according to the scaleFactor
+                        payload.objectBoxs[i].boundingBoxXOrd /= scaleFactor;
+                        payload.objectBoxs[i].boundingBoxYOrd /= scaleFactor;
+                        payload.objectBoxs[i].boundingBoxWidth /= scaleFactor;
+                        payload.objectBoxs[i].boundingBoxHeight /= scaleFactor;
+
+                        motionBlob = cv::Rect(payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd, payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight);
+
+                        //Align the motion blob coordinates to the cropped image size
+                        rescaledBlob = getRelativeBoundingBox(motionBlob, cropSize, allignedCenter);
+
+                        payload.objectBoxs[i].boundingBoxXOrd = rescaledBlob.x;
+                        payload.objectBoxs[i].boundingBoxYOrd = rescaledBlob.y;
+                        payload.objectBoxs[i].boundingBoxWidth = rescaledBlob.width;
+                        payload.objectBoxs[i].boundingBoxHeight = rescaledBlob.height;
+
+                        RDK_LOG(RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):After rescaling : Motion Blob[%d] : %d, %d, %d, %d\n", __FILE__, __LINE__,i, payload.objectBoxs[i].boundingBoxXOrd, payload.objectBoxs[i].boundingBoxYOrd, payload.objectBoxs[i].boundingBoxWidth, payload.objectBoxs[i].boundingBoxHeight);
+                    }
+                }
+
+                //Update cropped SmartThumbnail Coordinates
+                smartThumbCoord.x = (allignedCenter.x - (cropSize.width / 2));
+                smartThumbCoord.y = (allignedCenter.y - (cropSize.height / 2));
+                smartThumbCoord.width = cropSize.width;
+                smartThumbCoord.height = cropSize.height;
 
 #ifdef USE_FILE_UPLOAD
-            tv = gmtime(&currTime.tv_sec);
+                tv = gmtime(&currTime.tv_sec);
 
-            snprintf(payload.fname, sizeof(payload.fname), "%s/%04d%02d%02d%02d%02d%02d.jpg", STN_PATH,(tv->tm_year+1900), tv->tm_mon+1, tv->tm_mday, tv->tm_hour, tv->tm_min, tv->tm_sec);
-            RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Creating smart thumbnail upload file: %s\n",__FILE__, __LINE__, payload.fname);
-            //Write smart thumbnail to file.
-            imwrite(payload.fname,croppedObj);
+                snprintf(payload.fname, sizeof(payload.fname), "%s/%04d%02d%02d%02d%02d%02d.jpg", STN_PATH,(tv->tm_year+1900), tv->tm_mon+1, tv->tm_mday, tv->tm_hour, tv->tm_min, tv->tm_sec);
+                RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Creating smart thumbnail upload file: %s\n",__FILE__, __LINE__, payload.fname);
+                //Write smart thumbnail to file.
+                imwrite(payload.fname,croppedObj);
 #endif
-#ifdef _OBJ_DETECTION_
-#if 0
-//        if(detectionEnabled) {
-            cv::Mat cv_frame_rgb;
-            cv::cvtColor(croppedObj, cv_frame_rgb, cv::COLOR_BGR2RGB);
-            uint8_t *camera_buf = (uint8_t *) malloc(croppedObj.cols * croppedObj.rows * 3);
-            memcpy(camera_buf, cv_frame_rgb.data, croppedObj.cols * croppedObj.rows * 3);
-            cv::Mat cv_frame_dst = cv::Mat(croppedObj.rows, croppedObj.cols, CV_8UC3, camera_buf);
-            mpipe_port_onThunbmailEvent(cv_frame_dst, croppedObj.cols, croppedObj.rows);
-            cv_frame_rgb.release();
-            //mpipe_port_onThunbmailEvent(croppedObj, sTnWidth, sTnHeight);
-            //RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):notifying mpipe_port_onThunbmailEvent .\n", __FILE__, __LINE__);
-  //      }
-#endif
-        if(smartThInst->detectionInProgress) {
-            smartThInst->setClipEnd(true);
-#if 0
-#ifndef ENABLE_TEST_HARNESS
-            struct timeval now;
-            gettimeofday(&now, NULL);
-            if((now.tv_sec - smartThInst->detectionStartTime.tv_sec) > RECOVERY_TIME_THRESHOLD) {
-		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d Hang detected in mediapipe, triggering recovery.\n", __FUNCTION__, __LINE__);
-	        std::ofstream output(REQUEST_RECOVERY_FILE);
-            }
-#endif
-#endif
-            cv::Mat emptyMat;
-	    strcpy(smartThInst->currDetectionSTNFname, payload.fname);
-            mpipe_port_onLastFrameEvent(emptyMat, 0, 0);
-        }
-#endif
-        memset(&currTime, 0, sizeof(currTime));
-        clock_gettime(CLOCK_REALTIME, &currTime);
-        payload.motionTime = currTime.tv_sec;
+
+                memset(&currTime, 0, sizeof(currTime));
+                clock_gettime(CLOCK_REALTIME, &currTime);
+                payload.motionTime = currTime.tv_sec;
 
 #ifdef _HAS_DING_
-	if(smartThInst -> m_dingNotif )
-	{
-	   payload.dingtstamp = smartThInst ->m_dingTime;
-	}
+	        if(smartThInst -> m_dingNotif )
+	        {
+	            payload.dingtstamp = smartThInst ->m_dingTime;
+	        }
 #endif      
-            smartThInst->addSTN();
+                smartThInst->addSTN();
 
 #ifdef _OBJ_DETECTION_
-            if(!detectionEnabled) 
+                if(!detectionEnabled) 
 #endif
-                smartThInst -> setUploadStatus(true);
-	    ret = STH_SUCCESS;
+                    smartThInst -> setUploadStatus(true);
+	        ret = STH_SUCCESS;
+	    }
+#ifdef _OBJ_DETECTION_
+
+            if(smartThInst->detectionInProgress) {
+                smartThInst->setClipEnd(true);
+#if 0
+#ifndef ENABLE_TEST_HARNESS
+                struct timeval now;
+                gettimeofday(&now, NULL);
+                if((now.tv_sec - smartThInst->detectionStartTime.tv_sec) > RECOVERY_TIME_THRESHOLD) {
+	            RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d Hang detected in mediapipe, triggering recovery.\n", __FUNCTION__, __LINE__);
+	            std::ofstream output(REQUEST_RECOVERY_FILE);
+                }
+#endif
+#endif
+                cv::Mat emptyMat;
+	        strcpy(smartThInst->currDetectionSTNFname, payload.fname);
+                mpipe_port_onLastFrameEvent(emptyMat, 0, 0);
+            }
+#endif
         } else if (ignoreMotion == true) { // payload is not available due to event quiet interval
             // clock the current time
             memset(&currTime, 0, sizeof(currTime));

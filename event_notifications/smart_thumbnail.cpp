@@ -714,12 +714,18 @@ STH_STATUS SmartThumbnail::saveSTN()
 		// matrix to store color image
 		lHresRGBMat = cv::Mat(hres_y_height, hres_y_width, CV_8UC4);
 
+		std::unique_lock<std::mutex> lock(smartThInst->hres_data_lock);
 #ifdef ENABLE_TEST_HARNESS
 		lHresRGBMat = ofData.maxBboxObjYUVFrame.clone();
 #else
 		// convert the frame to BGR format
 		cv::cvtColor(ofData.maxBboxObjYUVFrame,lHresRGBMat, cv::COLOR_YUV2BGR_NV12);
 #endif
+		if(lHresRGBMat.empty()){
+			RDK_LOG(RDK_LOG_WARN, "LOG.RDK.SMARTTHUMBNAIL", "%s(%d):Empty frame for thumbnail creation, discarding this motion\n", __FILE__, __LINE__);
+			lock.unlock();
+			return ret;
+		}
 		if ((smartThInst->debugBlob) && (smartThInst->debugBlobOnFullFrame)) {
 			cv::Size fullCropSize = {lHresRGBMat.cols, lHresRGBMat.rows};
 			cv::Point2f lHresCenter = {lHresRGBMat.cols/2, lHresRGBMat.rows/2};
@@ -746,6 +752,7 @@ STH_STATUS SmartThumbnail::saveSTN()
 		}
 
 		currSTN.tsDelta = ofData.tsDelta;
+		lock.unlock();
 
 		// extracted the below logic from server scala code
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d):unionBox.x %d unionBox.y %d unionBox.height %d unionBox.width %d hres_y_width=%d ,hres_y_height=%d\n", __FILE__, __LINE__, unionBox.x, unionBox.y, unionBox.height, unionBox.width,hres_y_width,hres_y_height);
@@ -1606,10 +1613,12 @@ void SmartThumbnail::OnClipGenEnd(const char * cvrClipFname)
 		//save smart thumbnail from memory to file
 		if( false == ignoreMotion ) {
                         if(smartThInst->isPayloadAvailable) {
-			     smartThInst->saveSTN();
-			     smartThInst->addSTN();
-			     smartThInst->checkSTN();
+			     if(STH_ERROR !=  smartThInst->saveSTN()) {
+			         smartThInst->addSTN();
+			         smartThInst->checkSTN();
+			     }
 			     smartThInst->cvrClipGenStarted = false;
+
                         }
 		}
 	}
@@ -2297,6 +2306,8 @@ void SmartThumbnail::resetObjFrameData()
 void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t boundingBoxYOrd,int32_t boundingBoxWidth,int32_t boundingBoxHeight,			      						uint64_t currTime)
 {
 	unsigned char*  hres_yuvData = NULL;
+	
+	std::unique_lock<std::mutex> lock(smartThInst->hres_data_lock);
 	resetObjFrameData();
 #if 0
 	char tmpFname[256] = {'\0'};
@@ -2319,7 +2330,6 @@ void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t bounding
 	}
 	else {
 #endif
-		std::unique_lock<std::mutex> lock(smartThInst->hres_data_lock);
 
 #ifdef _HAS_XSTREAM_
 		smartThInst -> hres_y_height = smartThInst -> frameInfo->height;
@@ -2356,11 +2366,11 @@ void SmartThumbnail::updateObjFrameData(int32_t boundingBoxXOrd,int32_t bounding
 		//Full 720*1280 frame containing max bounding box
 		ofData.maxBboxObjYUVFrame = cv::Mat(smartThInst -> hres_frame_info -> height + (smartThInst -> hres_frame_info -> height)/2, smartThInst -> hres_frame_info -> width, CV_8UC1, hres_yuvData).clone();
 #endif
-		lock.unlock();
 
 #ifdef ENABLE_TEST_HARNESS
 	}
 #endif
+	lock.unlock();
 
 	if(hres_yuvData) {
 		free(hres_yuvData);
