@@ -1597,14 +1597,6 @@ void SmartThumbnail::OnClipGenEnd(const char * cvrClipFname)
 			}
 			else {
 				ignoreMotion = false;
-#ifndef _OBJ_DETECTION_
-				if(strlen(smartThInst->motionLog)) {
-					RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->motionLog);
-				}
-				if(strlen(smartThInst->doiMotionLog)) {
-					RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->doiMotionLog);
-				}
-#endif
 			}
 #ifdef _OBJ_DETECTION_
 		}
@@ -3282,4 +3274,5 @@ SmarttnMetadata_thumb::SmarttnMetadata_thumb()
 
 	s_curr_time = NULL;
 }
+
 
