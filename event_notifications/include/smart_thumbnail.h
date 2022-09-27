@@ -289,6 +289,9 @@ public:
 	//Thread routine to receive data
 	STH_STATUS receiveRtmessage();
 
+#ifndef ENABLE_TEST_HARNESS
+	void startSimulatorThread();
+#endif
 #ifdef _OBJ_DETECTION_
 #ifdef ENABLE_TEST_HARNESS
 	void notifyXvision(const DetectionResult &result, double motionTriggeredTime, int mpipeProcessedframes, double time_taken, double time_waited);
@@ -317,6 +320,7 @@ private:
 	STH_STATUS delAllSTN();
 	void printSTNList();
 	STH_STATUS createPayload(char* uploadFname);
+	STH_STATUS checkPayload(char* uploadFname);
 	bool checkForQuietTime();
         
 #ifdef _OBJ_DETECTION_
@@ -470,7 +474,13 @@ private:
 	struct timeval detectionStartTime, clipStartTime;
 #endif
 
+
 #endif
+#ifndef ENABLE_TEST_HARNESS
+	std::thread eventSimulatorThread;
+#endif
+	std::thread deliveryDetectionThread;
+	std::thread uploadPayloadThread;
 	std::condition_variable cv;
 	rtConnection connectionRecv;
 	rtConnection connectionSend;

@@ -231,9 +231,7 @@ int main(int argc, char** argv)
 	if(!cvrEnabled) {
 
 		// Run clip event simulator routine
-		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Creating Clip event simulator thread.\n", __FUNCTION__, __LINE__);
-		std::thread eventSimulatorThread(SmartThumbnail::generateCVREvents);
-		eventSimulatorThread.detach();
+		smTnInstance->startSimulatorThread();
 
 	}
 #endif
