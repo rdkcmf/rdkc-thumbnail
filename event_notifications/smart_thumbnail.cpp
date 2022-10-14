@@ -1668,6 +1668,7 @@ void SmartThumbnail::OnClipGenEnd(const char * cvrClipFname)
 #ifdef _OBJ_DETECTION_
 	if(smartThInst->detectionInProgress) {
 		smartThInst->setClipEnd(true);
+#if 0
 #ifndef ENABLE_TEST_HARNESS
             struct timeval now;
             gettimeofday(&now, NULL);
@@ -1675,6 +1676,7 @@ void SmartThumbnail::OnClipGenEnd(const char * cvrClipFname)
 		RDK_LOG(RDK_LOG_ERROR,"LOG.RDK.SMARTTHUMBNAIL","(%s):%d Hang detected in mediapipe, triggering recovery.\n", __FUNCTION__, __LINE__);
 	        std::ofstream output(REQUEST_RECOVERY_FILE);
             }
+#endif
 #endif
 		cv::Mat emptyMat;
 		mpipe_port_onLastFrameEvent(emptyMat, 0, 0);
@@ -3316,5 +3318,4 @@ SmarttnMetadata_thumb::SmarttnMetadata_thumb()
 
 	s_curr_time = NULL;
 }
-
 
