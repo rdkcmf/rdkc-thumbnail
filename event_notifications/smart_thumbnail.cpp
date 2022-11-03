@@ -292,8 +292,6 @@ SmartThumbnail::SmartThumbnail():
 	memset(modelName, 0, sizeof(modelName));
 	memset(macAddress, 0, sizeof(macAddress));
 	memset(firmwareName, 0, sizeof(firmwareName));
-	memset(motionLog, 0, sizeof(motionLog));
-	memset(doiMotionLog, 0, sizeof(doiMotionLog));
 	memset(&currSTN, 0, sizeof(currSTN));
 
 #ifdef XHB1
@@ -1608,14 +1606,6 @@ void SmartThumbnail::OnClipGenStart(const char* cvrClipFname)
         smartThInst->logDOIMotionEvent = true;
         smartThInst->logOutsideDOIMotionEvent = true;
 	RDK_LOG(RDK_LOG_TRACE1,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Resetting the logMotionEvent to true \n", __FILE__ , __LINE__);
-#ifdef _OBJ_DETECTION_
-	if(!detectionEnabled) {
-#endif
-		memset(smartThInst -> motionLog, 0, sizeof(smartThInst -> motionLog));
-		memset(smartThInst -> doiMotionLog, 0, sizeof(smartThInst -> doiMotionLog));
-#ifdef _OBJ_DETECTION_
-	}
-#endif
 
 	//reset payload flag
 	smartThInst->isPayloadAvailable = false;
@@ -2169,7 +2159,7 @@ void SmartThumbnail::ProcessFrameMetadata(SmarttnMetadata_thumb sm, int motionFl
 	  (sm.event_type == 4) && (isInsideROI == 1)) {
 
 		smartThInst->logROIMotionEvent = false;
-		sprintf(smartThInst->motionLog, "Received ROI MOTION from xvision during the current cvr interval,  time received: %llu", curr_time);
+		sprintf(currSTN.motionLog, "Received ROI MOTION from xvision during the current cvr interval,  time received: %llu", curr_time);
 	}
 
 	//Log first motion outside DOI
@@ -2187,7 +2177,7 @@ void SmartThumbnail::ProcessFrameMetadata(SmarttnMetadata_thumb sm, int motionFl
 	    (sm.event_type == 4) && (isInsideDOI == 1) && hasDOISet) {
 
 	smartThInst->logDOIMotionEvent = false;
-	sprintf(smartThInst->doiMotionLog, "Received DOI MOTION from xvision during the current cvr interval,  time received: %llu", curr_time);
+	sprintf(currSTN.doiMotionLog, "Received DOI MOTION from xvision during the current cvr interval,  time received: %llu", curr_time);
 	}
 
 #ifdef _OBJ_DETECTION_
@@ -2972,18 +2962,14 @@ bool SmartThumbnail::checkForQuietTime()
 	{
 		RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): Skipping Motion events! curr motion time %ld prev motion upload time %ld\n", __FILE__, __LINE__, payload.motionTime, smartThInst->stnUploadTime);
 		t2_event_d("STN_INFO_SkipEvent", 1);
-		memset(smartThInst -> motionLog, 0, sizeof(smartThInst -> motionLog));
-		memset(smartThInst -> doiMotionLog, 0, sizeof(smartThInst -> doiMotionLog));
 		return true;
 	} else {
-		if(strlen(smartThInst->motionLog)) {
-			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->motionLog);
+		if(strlen(payload.motionLog)) {
+			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, payload.motionLog);
 		}
-		if(strlen(smartThInst->doiMotionLog)) {
-			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, smartThInst->doiMotionLog);
+		if(strlen(payload.doiMotionLog)) {
+			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.CVR","%s(%d): %s\n", __FILE__, __LINE__, payload.doiMotionLog);
 		}
-		memset(smartThInst -> motionLog, 0, sizeof(smartThInst -> motionLog));
-		memset(smartThInst -> doiMotionLog, 0, sizeof(smartThInst -> doiMotionLog));
 		return false;
 	}
 }

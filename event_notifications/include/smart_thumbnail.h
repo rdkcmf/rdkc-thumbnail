@@ -219,6 +219,8 @@ typedef struct {
 	bool deliveryDetected;
 #endif
 	uint64_t motionTime;
+	char motionLog[CONFIG_STRING_MAX];
+	char doiMotionLog[CONFIG_STRING_MAX];
 
 	BoundingBox objectBoxs [UPPER_LIMIT_BLOB_BB];
 	BoundingBox unionBox;
@@ -434,8 +436,6 @@ private:
 	bool logROIMotionEvent;
         bool logDOIMotionEvent;
         bool logOutsideDOIMotionEvent;
-	char motionLog[CONFIG_STRING_MAX];
-	char doiMotionLog[CONFIG_STRING_MAX];
 	cv::Mat doi_binary;
 
 	bool uploadReady;
