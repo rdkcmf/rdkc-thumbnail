@@ -2736,6 +2736,10 @@ STH_STATUS SmartThumbnail::uploadPayload()
 
 #ifdef _OBJ_DETECTION_
 		if(smartThInst -> detectionEnabled) {
+			if(payload.detectionResult == NULL) {
+				RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection result is NULL, loading default result. Current payload name: %s, current detection clip name : %s, currSTN fname : %s, detectionInProgress: %s\n", __FUNCTION__, __LINE__, payload.fname, currDetectionSTNFname, currSTN.fname, (detectionInProgress == true) ? "true" : "false");
+				json_object_set_new(payload.detectionResult, "tags", json_array());
+			}
 			char *jsonStr = json_dumps(payload.detectionResult, 0);
 			RDK_LOG( RDK_LOG_INFO,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): X-IMAGE-METADATA: %s\n", __FUNCTION__, __LINE__, jsonStr);
 			//Apply base64 encoding on the metadata
@@ -2945,6 +2949,8 @@ void SmartThumbnail::waitForDeliveryResult()
 		RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): Detection not completed!... Adding empty detection result to payload for thumbnail %s\n", __FUNCTION__, __LINE__, payload.fname);
 		payload.detectionResult = json_object();
 		json_object_set_new(payload.detectionResult, "tags", json_array());
+	} else {
+		RDK_LOG( RDK_LOG_WARN,"LOG.RDK.SMARTTHUMBNAIL","%s(%d): detection not in progress... Continuing with preloaded detection result\n", __FUNCTION__, __LINE__);
 	}
 
 	gettimeofday(&end, NULL);
